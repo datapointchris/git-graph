@@ -40,15 +40,12 @@ check-filenames = true
 # count = ""
 # quiet-level = 3
 
-
-
 [tool.isort]
 line_length = 120
 profile = "black"
 atomic = true
 skip = [".gitignore"]
 extend_skip = [".md", ".json"]
-
 
 [tool.mypy]
 pretty = true
@@ -58,9 +55,6 @@ allow_untyped_defs = true
 check_untyped_defs = false  # Can enable this when all the routes are updated
 plugins = ["pydantic.mypy"]
 warn_return_any = false
-
-
-
 
 [tool.refurb]
 enable_all = true
