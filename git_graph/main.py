@@ -127,7 +127,7 @@ class GitHistory:
         self.command('git commit -m "init: Initial Project"')
 
     def delete_commit_temp_files(self, execute=False):
-        command = f'rm {self.TEMP_FILE_PREFIX}*.py > /dev/null 2>&1'
+        command = f'rm {self.TEMP_FILE_PREFIX}*.py > /dev/null 2>&1; rm __init__.py > /dev/null 2>&1'
         if execute:  # execute command directly when cleaning up after KeyboardInterrupt
             subprocess.run(command, shell=True)
         else:
@@ -212,9 +212,7 @@ class GitHistory:
 
 
 if __name__ == '__main__':
-    DRY_RUN = False
-    with GitHistory(dry_run=DRY_RUN, merge_flags={MergeFlags.no_ff}) as gh:
-        merge_flags = {MergeFlags.no_ff}
+    with GitHistory(dry_run=False, merge_flags={MergeFlags.no_ff}) as gh:
         delete_on_merge = True
 
         inner_features = [
@@ -222,28 +220,28 @@ if __name__ == '__main__':
                 feature_name='base=feature target=master',
                 base_branch='feature',
                 merge_branch='master',
-                merge_flags=merge_flags,
+                merge_flags=gh.merge_flags,
                 delete_on_merge=delete_on_merge,
             ),
             InnerFeature(
                 feature_name='base=feature target=feature',
                 base_branch='feature',
                 merge_branch='feature',
-                merge_flags=merge_flags,
+                merge_flags=gh.merge_flags,
                 delete_on_merge=delete_on_merge,
             ),
             InnerFeature(
                 feature_name='base=master target=master',
                 base_branch='master',
                 merge_branch='master',
-                merge_flags=merge_flags,
+                merge_flags=gh.merge_flags,
                 delete_on_merge=delete_on_merge,
             ),
             InnerFeature(
                 feature_name='base=master target=feature',
                 base_branch='master',
                 merge_branch='feature',
-                merge_flags=merge_flags,
+                merge_flags=gh.merge_flags,
                 delete_on_merge=delete_on_merge,
             ),
         ]
