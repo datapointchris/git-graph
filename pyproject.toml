@@ -14,14 +14,10 @@ colorama = "^0.4.6"
 
 [tool.poetry.dev-dependencies]
 ipython = "^8.4.0"
+pre-commit = "^3.7.0"
+
 
 # ---------- Configurations ---------- #
-
-
-[tool.bandit]
-exclude_dirs = ["tests", "scripts"]
-skips = ["B311"]
-
 
 [tool.black]
 line-length = 120
@@ -45,20 +41,6 @@ check-filenames = true
 # quiet-level = 3
 
 
-[tool.coverage.run]
-parallel = true
-branch = true
-source = ["ichrisbirch"]
-omit = ["ichrisbirch/alembic"]
-
-[tool.coverage.paths]
-source = ["ichrisbirch"]
-
-[tool.coverage.report]
-fail_under = 25
-show_missing = true
-exclude_lines = ["pragma: no cover"]
-
 
 [tool.isort]
 line_length = 120
@@ -78,10 +60,6 @@ plugins = ["pydantic.mypy"]
 warn_return_any = false
 
 
-[tool.pytest.ini_options]
-addopts = ""
-minversion = "6.0"
-testpaths = ["tests"]
 
 
 [tool.refurb]

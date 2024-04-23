@@ -1,11 +1,11 @@
 import enum
+import os
 import random
 import subprocess
 import textwrap
 import time
-from typing import NamedTuple
 from pathlib import Path
-import os
+from typing import NamedTuple
 
 from colorama import Fore, Style
 from faker import Faker
@@ -35,7 +35,13 @@ class GitHistory:
     SECONDS_DELAY_BETWEEN_COMMANDS = 0.1  # Without delay, sometimes git commands are executed out of order
     TEMP_FILE_PREFIX = 'temp_py_file_'  # Used in commits
 
-    def __init__(self, interactive: bool = False, dry_run: bool = False, merge_flags: set[MergeFlags] | None = None, target_dir: Path = Path('target/')):
+    def __init__(
+        self,
+        interactive: bool = False,
+        dry_run: bool = False,
+        merge_flags: set[MergeFlags] | None = None,
+        target_dir: Path = Path('target/'),
+    ):
         self.interactive = interactive
         self.dry_run = dry_run
         self.merge_flags = merge_flags
@@ -68,8 +74,7 @@ class GitHistory:
         self.commands.append(command)
 
     def write_commands_to_file(self, filename: str):
-        with open(filename, 'w') as f:
-            f.write(textwrap.dedent('\n'.join(self.commands)))
+        Path(filename).write_text(textwrap.dedent('\n'.join(self.commands)))
 
     def execute_commands(self):
         # if interactive, print and execute commands only stopping at commits or merges
@@ -152,7 +157,7 @@ class GitHistory:
         merge_branch: str = 'master',
         merge_flags: set[MergeFlags] | None = None,
         delete_on_merge: bool = True,
-        inner_features: list[InnerFeature] = list(),
+        inner_features: list[InnerFeature] = [],
     ):
         merge_flags = merge_flags or self.merge_flags or set()
         merge_flags.add(MergeFlags.no_edit)  # Always no-edit

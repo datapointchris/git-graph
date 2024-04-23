@@ -1,16 +1,6 @@
 fail_fast: false
 repos:
 
-  - repo: local
-    hooks:
-      - id: git-secret
-        name: Use git-secret to hide MY secrets
-        stages: [commit]
-        language: system
-        entry: git-secret hide -m
-        pass_filenames: false
-        always_run: true
-
   - repo: https://github.com/python-poetry/poetry
     rev: "1.7.0"
     hooks:
@@ -55,13 +45,6 @@ repos:
       - id: codespell
         args: ["--toml", "pyproject.toml"]
 
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.7
-    hooks:
-      - id: bandit
-        args: ["-c", "pyproject.toml"]
-        additional_dependencies: ["bandit[toml]"]
-
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.39.0
     hooks:
@@ -91,25 +74,3 @@ repos:
       - id: mypy
         args: ["--config-file", "pyproject.toml", --install-types, --non-interactive]
         additional_dependencies: ["pydantic"]
-
-  - repo: local
-    hooks:
-      - id: validate-html
-        name: validate html against w3c standards
-        stages: [commit]
-        language: system
-        entry: python scripts/validate_html.py
-        types: [html]
-        pass_filenames: false
-        always_run: false
-
-  - repo: local
-    hooks:
-      - id: pytest
-        name: pytest with coverage
-        stages: [commit]
-        language: system
-        entry: zsh -c 'export ENVIRONMENT=testing && pytest --cov=ichrisbirch'
-        types: [python]
-        pass_filenames: false
-        always_run: false
