@@ -15,6 +15,78 @@ colorama = "^0.4.6"
 [tool.poetry.dev-dependencies]
 ipython = "^8.4.0"
 
+# ---------- Configurations ---------- #
+
+
+[tool.bandit]
+exclude_dirs = ["tests", "scripts"]
+skips = ["B311"]
+
+
+[tool.black]
+line-length = 120
+skip-string-normalization = true
+exclude = '''
+(
+/alembic
+| .git
+| .mypy_cache
+| .venv
+| build
+| dist
+)
+'''
+
+[tool.codespell]
+skip = '*.css.map'
+ignore-words-list = "astroid,aNULL,ANULL,anull"
+check-filenames = true
+# count = ""
+# quiet-level = 3
+
+
+[tool.coverage.run]
+parallel = true
+branch = true
+source = ["ichrisbirch"]
+omit = ["ichrisbirch/alembic"]
+
+[tool.coverage.paths]
+source = ["ichrisbirch"]
+
+[tool.coverage.report]
+fail_under = 25
+show_missing = true
+exclude_lines = ["pragma: no cover"]
+
+
+[tool.isort]
+line_length = 120
+profile = "black"
+atomic = true
+skip = [".gitignore"]
+extend_skip = [".md", ".json"]
+
+
+[tool.mypy]
+pretty = true
+ignore_missing_imports = true
+# strict = true
+allow_untyped_defs = true
+check_untyped_defs = false  # Can enable this when all the routes are updated
+plugins = ["pydantic.mypy"]
+warn_return_any = false
+
+
+[tool.pytest.ini_options]
+addopts = ""
+minversion = "6.0"
+testpaths = ["tests"]
+
+
+[tool.refurb]
+enable_all = true
+
 [tool.ruff]
 line-length = 120
 ignore = []
