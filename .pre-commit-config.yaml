@@ -124,3 +124,39 @@ repos:
         # name covers homelab's group_data/secrets.yaml as well as the
         # *.enc.env convention.
         exclude: '(^|/)(.*-lock\.json|.*\.lock|uv\.lock|package-lock\.json|go\.sum|secrets?[^/]*\.(ya?ml|env|json)|.*\.enc\.[^/]+)$'
+
+# generated:python-format - Python: dependency lock
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.8.3
+    hooks:
+      - id: uv-lock
+
+  # Python: formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.5
+    hooks:
+      - id: ruff-format
+
+# generated:python-lint - Python: linting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.5
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+
+  # Python: type checking (uses uv for full dependency visibility)
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run mypy . --install-types --non-interactive
+        language: system
+        types: [python]
+        pass_filenames: false
+
+# generated:github-actions - GitHub Actions
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
+    hooks:
+      - id: actionlint
+        args: ["-color", "-shellcheck="]

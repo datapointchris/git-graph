@@ -1,37 +1,28 @@
-[tool.poetry]
+[project]
 name = "git-graph"
 version = "0.1.0"
-description = "Make git graphs to visualize how git strategy will look"
-authors = ["Chris Birch <datapointchris@gmail.com>"]
-license = "MIT"
+description = "Build synthetic git histories under different branching strategies, to see what merge, rebase and squash actually produce"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Chris Birch", email = "datapointchris@gmail.com" }]
+requires-python = ">=3.13"
+dependencies = [
+    "colorama>=0.4.6",
+    "faker>=24.11.0",
+]
 
-[tool.poetry.dependencies]
-python = "3.12"
-Faker = "^24.11.0"
-pydantic = "^2.7.1"
-ipykernel = "^6.29.4"
-colorama = "^0.4.6"
+[dependency-groups]
+dev = [
+    "ipython>=8.4.0",
+    "pre-commit>=3.7.0",
+]
 
-[tool.poetry.dev-dependencies]
-ipython = "^8.4.0"
-pre-commit = "^3.7.0"
+[build-system]
+requires = ["uv_build>=0.9.13,<0.10.0"]
+build-backend = "uv_build"
 
 
 # ---------- Configurations ---------- #
-
-[tool.black]
-line-length = 120
-skip-string-normalization = true
-exclude = '''
-(
-/alembic
-| .git
-| .mypy_cache
-| .venv
-| build
-| dist
-)
-'''
 
 [tool.codespell]
 skip = '*.css.map'
@@ -40,39 +31,77 @@ check-filenames = true
 # count = ""
 # quiet-level = 3
 
-[tool.isort]
-line_length = 120
-profile = "black"
-atomic = true
-skip = [".gitignore"]
-extend_skip = [".md", ".json"]
-
 [tool.mypy]
 pretty = true
 ignore_missing_imports = true
-# strict = true
 allow_untyped_defs = true
-check_untyped_defs = false  # Can enable this when all the routes are updated
-plugins = ["pydantic.mypy"]
+check_untyped_defs = false
 warn_return_any = false
 
 [tool.refurb]
 enable_all = true
 
 [tool.ruff]
-line-length = 120
-ignore = []
+line-length = 140
 
 [tool.ruff.format]
 quote-style = "single"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
+docstring-code-format = true
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "I",    # isort
+]
+ignore = [
+    "SIM108",  # ternary operator — often less readable
+]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
-"env.py" = ["F401"]
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.pyright]
+typeCheckingMode = "standard"
+analyzeUnannotatedFunctions = true
+
+[tool.pytest.ini_options]
+addopts = "-vv"
+minversion = "8.0"
+testpaths = ["tests"]
+
+[tool.forge]
+# Keys the standard owns, written by `forge dies run maintenance/sync-pyproject.sh`.
+# Dropping one from the template removes it here on the next sync; a key absent
+# from this list belongs to the project and is never touched. Do not hand-edit.
+managed = [
+    ["ruff", "line-length"],
+    ["ruff", "format", "quote-style"],
+    ["ruff", "format", "indent-style"],
+    ["ruff", "format", "skip-magic-trailing-comma"],
+    ["ruff", "format", "line-ending"],
+    ["ruff", "format", "docstring-code-format"],
+    ["ruff", "lint", "select"],
+    ["ruff", "lint", "ignore"],
+    ["ruff", "lint", "isort", "force-single-line"],
+    ["ruff", "lint", "per-file-ignores", "__init__.py"],
+    ["mypy", "pretty"],
+    ["mypy", "ignore_missing_imports"],
+    ["mypy", "check_untyped_defs"],
+    ["mypy", "warn_return_any"],
+    ["pyright", "typeCheckingMode"],
+    ["pyright", "analyzeUnannotatedFunctions"],
+    ["codespell", "check-filenames"],
+    ["pytest", "ini_options", "addopts"],
+    ["pytest", "ini_options", "minversion"],
+    ["pytest", "ini_options", "testpaths"],
+]

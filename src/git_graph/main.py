@@ -7,7 +7,8 @@ import time
 from pathlib import Path
 from typing import NamedTuple
 
-from colorama import Fore, Style
+from colorama import Fore
+from colorama import Style
 from faker import Faker
 
 SANDBOX_MARKER = '.git-graph-sandbox'
@@ -42,7 +43,8 @@ def prepare_sandbox(target_dir: Path) -> Path:
     `rm -rf` inside either.
     """
     target = target_dir.resolve()
-    repo_root = Path(__file__).resolve().parents[1]
+    # parents[2] under the src layout: main.py, git_graph/, src/, then the repo.
+    repo_root = Path(__file__).resolve().parents[2]
     if target == Path.home() or target == repo_root or target in repo_root.parents:
         raise SystemExit(f'refusing to use {target} as a sandbox: it holds real work')
     if target.exists() and any(target.iterdir()) and not (target / SANDBOX_MARKER).exists():
@@ -131,7 +133,9 @@ class GitHistory:
             subprocess.run(command, shell=True)
             time.sleep(self.SECONDS_DELAY_BETWEEN_COMMANDS)
 
-        user_prompt = f'{Fore.GREEN}[Enter]{Style.RESET_ALL} for next commit.  {Fore.GREEN}"finish"{Style.RESET_ALL} to run all remaining commands: '
+        user_prompt = (
+            f'{Fore.GREEN}[Enter]{Style.RESET_ALL} for next commit.  {Fore.GREEN}"finish"{Style.RESET_ALL} to run all remaining commands: '
+        )
         try:
             if self.interactive:
                 user_cmd = None
@@ -212,9 +216,14 @@ class GitHistory:
         merge_branch: str = 'master',
         merge_flags: set[MergeFlags] | None = None,
         delete_on_merge: bool = True,
-        inner_features: list[InnerFeature] = [],
+        inner_features: list[InnerFeature] | None = None,
     ):
-        merge_flags = merge_flags or self.merge_flags or set()
+        inner_features = inner_features or []
+        # Copied, not aliased. `merge_flags or self.merge_flags` hands back the
+        # caller's own set, so the no_edit below would add itself to the instance
+        # default — and __main__ passes gh.merge_flags into every InnerFeature,
+        # which makes one feature's flags leak into all the others.
+        merge_flags = set(merge_flags or self.merge_flags or ())
         merge_flags.add(MergeFlags.no_edit)  # Always no-edit
         parsed_flags = ' '.join([flag.value for flag in merge_flags])
         squash_branch = '--squash' in parsed_flags

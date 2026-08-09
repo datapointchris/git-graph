@@ -26,3 +26,4 @@ htmlcov/
 TEST*
 
 .planning
+coverage.xml

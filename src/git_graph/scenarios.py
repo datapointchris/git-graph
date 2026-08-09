@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-from main import GitHistory, MergeFlags
+from git_graph.main import GitHistory
+from git_graph.main import MergeFlags
 
 
 @dataclass
