@@ -46,7 +46,7 @@ class Open:
     @property
     def label(self) -> str:
         where = f' off {self.base}' if self.base else ''
-        return f'{"worktree new" if self.worktree else "open"} {self.feature}{where}'
+        return f'open {self.feature}{where}{" in a worktree" if self.worktree else ""}'
 
 
 @dataclass(frozen=True)
@@ -106,7 +106,7 @@ class Restack:
 
 @dataclass(frozen=True)
 class Land:
-    """Land a branch on the trunk with one of GitHub's buttons, or with `worktree land`."""
+    """Land a branch on the trunk with one of GitHub's buttons, or by fast-forward push."""
 
     feature: str
     style: LandStyle = LandStyle.merge
@@ -117,8 +117,7 @@ class Land:
     @property
     def label(self) -> str:
         target = f' into {self.into}' if self.into else ''
-        verb = 'worktree land' if self.style is LandStyle.fast_forward else f'land ({self.style})'
-        return f'{verb} {self.feature}{target}'
+        return f'land ({self.style}) {self.feature}{target}'
 
 
 @dataclass(frozen=True)

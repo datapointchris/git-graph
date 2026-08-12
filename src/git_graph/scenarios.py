@@ -84,8 +84,8 @@ def interleaved(catch_up: CatchUpStyle, land: LandStyle) -> Timeline:
 def contested(catch_up: CatchUpStyle, resolve: Resolution) -> Timeline:
     """One file, written by both sides. The only way anything here can conflict.
 
-    Two branch commits rewrite it, so a rebase replaying them stops twice while a merge
-    absorbing them stops once — the trade the fleet's rebase rule is actually made against,
+    Two branch commits rewrite it, so a rebase replaying them stops once per commit while a
+    merge absorbing them stops once — the trade choosing between them is actually made against,
     and a cost the finished graph does not record anywhere.
     """
     return (
@@ -142,7 +142,7 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         name='rebase-catch-up',
         group='Catching up',
-        teaches='Rebase to catch up, merge button to land. The fleet workflow.',
+        teaches='Rebase to catch up, merge button to land. One clean bubble per feature.',
         timeline=interleaved(CatchUpStyle.rebase, LandStyle.merge),
         compare_with='merge-catch-up',
     ),
@@ -177,9 +177,9 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         name='worktree-land',
         group='Worktree',
-        teaches='worktree new, one commit, worktree land. Compare the hashes with commit-to-main.',
+        teaches='One commit made in a second worktree, landed by fast-forward. Compare hashes with commit-to-main.',
         timeline=(
-            Note('worktree new session-token-refresh — a second checkout, sharing one object store'),
+            Note('git worktree add — a second checkout, sharing one object store with the first'),
             Open('session token refresh', worktree=True),
             replace(WORKTREE_WORK, on='session token refresh'),
             Land('session token refresh', LandStyle.fast_forward),

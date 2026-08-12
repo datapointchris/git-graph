@@ -38,9 +38,10 @@ REMOTE_NAME = 'origin'
 REMOTE_DIR = 'origin.git'
 """A bare repo inside the sandbox, so pushing is real rather than approximated.
 
-`worktree land` is `git push origin HEAD:main`, and the fleet's rebase rule turns on the
-force push being the rebase reaching the remote rather than a workaround for it. Neither is
-modelable without somewhere to push, and both are the point of the scenarios that use them.
+Landing a branch by fast-forward is `git push origin HEAD:main`, and the reason a rebased
+branch needs a force push is that the replayed commits are new objects rather than the same
+ones moved. Neither is modelable without somewhere to push, and both are the point of the
+scenarios that use them.
 """
 
 SYNTHETIC_AUTHOR_NAME = 'git-graph'
@@ -146,13 +147,13 @@ class LandStyle(enum.StrEnum):
     visible bubble with both parents; `squash` collapses it into one new commit and the
     branch's own commits never reach the trunk; `rebase` replays them with new hashes.
 
-    `fast_forward` is not a button — it is `worktree land`, which rebases and pushes
-    `HEAD:main`. It produces no merge commit and no new commit of its own, so one commit
-    stays one commit, which is the entire claim the worktree workflow rests on.
+    `fast_forward` is not a button: it rebases and pushes `HEAD:main` directly, producing no
+    merge commit and no new commit of its own, so one commit stays one commit. That is the
+    entire claim any single-commit branch workflow rests on, and the scenarios exist to check it.
 
-    `merge` carries the fleet's own settings — `merge_commit_title=PR_TITLE` and
-    `merge_commit_message=PR_BODY`, per forge's sync-merge-settings.sh — rather than
-    GitHub's `Merge pull request #N from ...` default.
+    `merge` is modelled with the repository settings `merge_commit_title=PR_TITLE` and
+    `merge_commit_message=PR_BODY`, which put the change and its reasoning in the merge commit
+    rather than GitHub's `Merge pull request #N from ...` default.
     """
 
     merge = 'merge'
@@ -494,7 +495,7 @@ class GitHistory:
         body: str | None = None,
         delete: bool = True,
     ) -> None:
-        """Land a branch on the trunk the way the named button, or `worktree land`, would.
+        """Land a branch on the trunk the way the named button, or a fast-forward push, would.
 
         An approximation, and worth knowing where it stops: GitHub performs the real squash and
         rebase with its own committer identity and timestamps. The shape reproduces; the
@@ -519,8 +520,8 @@ class GitHistory:
                 self.checkout(into)
                 self.command(f'git merge -q --ff-only {branch}')
             case LandStyle.fast_forward:
-                # `worktree land`: rebase onto the remote's tip, push HEAD straight at the
-                # trunk, then catch the primary checkout up. One commit stays one commit.
+                # Rebase onto the remote's tip, push HEAD straight at the trunk, then catch
+                # the local trunk up. One commit stays one commit; no merge commit is created.
                 self.checkout(branch)
                 self.command(self.committed(f'git rebase -q {REMOTE_NAME}/{into}'))
                 self.command(f'git push -q {REMOTE_NAME} HEAD:{into}')
@@ -547,6 +548,11 @@ class GitHistory:
         self.command(f'git tag {name}')
 
     def push(self, ref: str = DEFAULT_BRANCH, force: bool = False) -> None:
-        """Push, with the lease flags the fleet requires rather than a bare --force."""
+        """Push, with the lease flags rather than a bare --force.
+
+        `--force-with-lease` refuses when the remote moved since the last fetch and
+        `--force-if-includes` refuses when you fetched but never integrated what you fetched.
+        A bare `--force` destroys both cases silently.
+        """
         lease = ' --force-with-lease --force-if-includes' if force else ''
         self.command(f'git push -q{lease} {REMOTE_NAME} {ref}', tolerate_failure=force)

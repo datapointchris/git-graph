@@ -1,8 +1,7 @@
 # Claude Code - git-graph Development Context
 
 Universal rules — git safety, commit conventions, testing, comments, tool preferences — live in
-`~/.claude/CLAUDE.md`, and how the fleet builds Python lives in `~/dev/standards/python.md`.
-Neither is restated here.
+`~/.claude/CLAUDE.md` and are not restated here.
 
 **This file contains ONLY git-graph-specific rules and patterns.**
 
@@ -108,7 +107,7 @@ the reverse of a merge. `conflict-keep-trunk` exists to show it, and it empties 
 ## Two models of merging live here, on purpose
 
 `MergeFlags` + the `Merge` event model **git's local verbs**. `LandStyle` + the `Land` event model
-**GitHub's three buttons plus `worktree land`**, which are not the same thing — and the graph that
+**GitHub's three buttons plus a fast-forward push**, which are not the same thing — and the graph that
 matters is the one in the repo.
 
 ## Where things live
@@ -119,7 +118,10 @@ the walker. `scenarios.py` is the catalogue. `fingerprint.py` measures a built r
 DAG — the drawing you are shown is the one you will see in your own terminal. `main.py` is the
 typer app.
 
-The standard is `~/dev/standards/cli-design.md`, and two of its rules shaped this surface: `show`
-is the dry run and `build` is the write, so no `--dry-run` flag exists to contradict a verb; and a
-build narrates to **stderr** with git's own stdout relayed there too, because `compare --json` has
-to parse.
+Two conventions shaped this surface and are worth keeping. A flag never decides whether a command
+writes, so `show` is the dry run, `build` is the write, and no `--dry-run` exists to contradict a
+verb. And stdout carries data only, so a build narrates to **stderr** with git's own stdout relayed
+there too, because `compare --json` has to parse.
+
+`process.py` is the boundary: every subprocess in the package goes through it, including the reads
+`fingerprint.py` makes of a built repo. There are no sanctioned exceptions, and a test asserts it.

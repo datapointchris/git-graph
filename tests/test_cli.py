@@ -28,7 +28,7 @@ def run(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
 
 
 def test_no_arguments_shows_help_rather_than_an_error():
-    """Exit 2 is typer's own no_args_is_help code, which every Python CLI on the fleet returns."""
+    """Exit 2 is typer's own no_args_is_help code, not an error this tool chose to return."""
     result = run()
     assert result.returncode == 2
     assert 'scenarios' in result.stdout

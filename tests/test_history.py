@@ -29,7 +29,7 @@ def test_init_writes_an_identity_git_can_commit_with():
 
 
 def test_init_creates_a_remote_to_push_at():
-    """Without one, `worktree land` cannot be modelled and a force push has nowhere to go."""
+    """Without one, a fast-forward landing cannot be modelled and a force push has nowhere to go."""
     history = GitHistory()
     history.init_git_repo()
     assert [text for text in texts(history) if text.startswith('git init --bare')]
@@ -84,7 +84,7 @@ def test_the_squash_button_forces_the_branch_delete():
     assert 'git branch -D -q feature/x' in texts(history)
 
 
-def test_worktree_land_pushes_rather_than_merging():
+def test_a_fast_forward_landing_pushes_rather_than_merging():
     history = GitHistory()
     history.land('feature/x', LandStyle.fast_forward)
     assert [text for text in texts(history) if text.startswith('git push') and 'HEAD:main' in text]

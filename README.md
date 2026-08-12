@@ -64,8 +64,8 @@ Identical repositories, down to the commit hashes.
 ```
 
 That is the whole answer to what a worktree does to a repository: nothing. A second checkout
-shares one object store, and `worktree land` fast-forwards, so one commit stays one commit and
-the history is indistinguishable from having typed it on the trunk. Move the trunk first
+shares one object store, and landing by fast-forward creates no commit of its own, so one commit
+stays one commit and the history is indistinguishable from having typed it on the trunk. Move the trunk first
 (`compare worktree-behind committed-in-order`) and the verdict drops to `objects`, with a table
 naming every commit that kept its content and changed its hash.
 
@@ -96,6 +96,6 @@ that matters is the one in the repo. GitHub performs the real squash and rebase 
 committer identity and timestamps; the shape reproduces here and the metadata does not, which is
 fine for a comparison about shape.
 
-There is a real remote — a bare repo inside the sandbox — because `worktree land` pushes, and
-because the reason a rebased branch needs a force push is that the replayed commits are new
+There is a real remote — a bare repo inside the sandbox — because a fast-forward landing pushes,
+and because the reason a rebased branch needs a force push is that the replayed commits are new
 objects rather than the same ones moved.
