@@ -4,7 +4,6 @@ import random
 import shlex
 import subprocess
 import textwrap
-import time
 from pathlib import Path
 from typing import NamedTuple
 
@@ -141,7 +140,6 @@ class GitHistory:
     and deleting temp files created during the process.
     """
 
-    SECONDS_DELAY_BETWEEN_COMMANDS = 0.1  # Without delay, sometimes git commands are executed out of order
     TEMP_FILE_PREFIX = 'temp_py_file_'  # Used in commits
 
     def __init__(
@@ -201,9 +199,11 @@ class GitHistory:
         # if not interactive or dry_run, print and execute all commands
 
         def _execute_and_print_next_command(command: str):
-            print(f'{Fore.BLUE}{command}{Style.RESET_ALL}')
+            # Flushed before handing the terminal over, because git writes to the same
+            # descriptor directly while this print goes through Python's buffer — unflushed,
+            # the line announcing a command appears after that command's own output.
+            print(f'{Fore.BLUE}{command}{Style.RESET_ALL}', flush=True)
             subprocess.run(command, shell=True)
-            time.sleep(self.SECONDS_DELAY_BETWEEN_COMMANDS)
 
         user_prompt = (
             f'{Fore.GREEN}[Enter]{Style.RESET_ALL} for next commit.  {Fore.GREEN}"finish"{Style.RESET_ALL} to run all remaining commands: '
