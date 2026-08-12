@@ -1,4 +1,4 @@
-"""The catalogue: one named history per git strategy or command worth seeing the shape of.
+"""The catalogue: one named scenario per git strategy or command worth seeing the shape of.
 
 A scenario is a name and a timeline, nothing else. Where two scenarios exist to be compared
 they are built from one shared timeline with a single argument changed, so the difference in

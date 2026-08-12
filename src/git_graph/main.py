@@ -1,4 +1,4 @@
-"""The command line: read what a strategy would do, build it, then look at what it left behind."""
+"""The command line: read what a scenario would do, build it, then look at what it left behind."""
 
 import contextlib
 import importlib.metadata
@@ -22,8 +22,9 @@ from git_graph.scenarios import Scenario
 from git_graph.scenarios import find
 
 ROOT_HELP = (
-    'Build synthetic git histories under named strategies, so the graph each one produces can be '
-    'looked at instead of argued about.'
+    'Build synthetic git histories from named scenarios, so the graph each one produces can be '
+    'looked at instead of argued about. A scenario is a sequence of git operations — open a branch, '
+    'commit, catch up, land, cherry-pick, force-push — run against a throwaway repo.'
     '\n\n'
     'The noun is always `scenarios`, so a list to show to build loop changes only the verb. '
     '`compare` builds two into their own sandboxes and reports where they part company, going '
@@ -44,7 +45,7 @@ app = typer.Typer(name='git-graph', no_args_is_help=True, help=ROOT_HELP)
 scenarios_app = typer.Typer(
     name='scenarios',
     no_args_is_help=True,
-    help='Named git strategies, the histories they build, and what separates two of them.',
+    help='Named scenarios, the histories they build, and what separates two of them.',
 )
 app.add_typer(scenarios_app, name='scenarios')
 

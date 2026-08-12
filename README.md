@@ -1,8 +1,8 @@
 # Git-Graph
 
-Build synthetic git histories under different branching strategies, so the resulting graph can be
-looked at rather than argued about. Generates the git commands first, then dry-runs, single-steps,
-or executes them.
+Build synthetic git histories from named scenarios, so the graph each one produces can be looked
+at rather than argued about. Generates the git commands first, then prints, single-steps, or
+executes them.
 
 ## The sandbox guard
 
@@ -23,9 +23,9 @@ git remote add origin https://github.com/datapointchris/git-graph.git
 ## Running it
 
 A scenario is a name and a timeline: a sequence of git operations — open a branch, commit, catch
-up, land, cherry-pick, force-push — each carrying its own options. Nothing about the algebra is
-specific to any one strategy, so a history where one branch rebases and another merges is as
-writable as the five that shipped first.
+up, land, cherry-pick, force-push — each carrying its own options. Every option lives on the
+event rather than on the scenario, so a history where one branch rebases and another merges is as
+writable as one that treats them alike.
 
 ```bash
 git-graph scenarios list                          # grouped by what each one teaches
