@@ -47,7 +47,34 @@ shelling out directly, or it silently loses all three modes.
 
 ## Scenarios are the unit of comparison
 
-A scenario is one named branching strategy plus the history it produces, so two can be built and
-diffed. `scenarios.py` is currently a bare dataclass that nothing uses, and strategies live as
-commented-out lines under `__main__` — which is why no two can be compared without editing code.
-Wiring that up is the main open work; see `.planning/`.
+A scenario is one catch-up style plus one landing button plus a timeline, in `scenarios.py`. The
+timeline is **data, not a callable**, because a scenario has to be listable and readable without
+being run — `scenarios show` prints every command a build would issue and issues none of them.
+
+Two rules the shipped scenarios exist to protect, both of which are easy to break by adding a
+"reasonable" one:
+
+- **Vary one axis at a time.** `rebase-catch-up`, `merge-catch-up` and `no-catch-up` differ only in
+  the catch-up; `rebase-catch-up`, `squash-land` and `rebase-land` differ only in the button. A
+  scenario varying both answers neither question.
+- **Every `CatchUp` needs real trunk movement before it** — an `AdvanceTrunk`, or another feature
+  landing. A catch-up with nothing to absorb is a no-op git reports as "already up to date", and a
+  timeline full of those compares two strategies on a history where neither does anything.
+
+`catch_up()` deliberately writes no annotating commit, unlike `feature()`, which commits the
+command text so the graph shows it. Whether a catch-up leaves a commit behind is the thing being
+measured, and a marker the tool wrote would appear in both shapes.
+
+## Two models of merging live here, on purpose
+
+`MergeFlags` + `feature()` model **git's local verbs**. `LandStyle` + `land()` model **GitHub's
+three buttons**, which are not the same thing — and the graph that matters is the one in the repo.
+Neither replaces the other; `feature()` also carries the nested-branch case (`InnerFeature`) that
+the scenario timeline cannot yet express.
+
+## The CLI is the front door
+
+`main.py` is the typer app, `history.py` is the engine. The standard is `~/dev/standards/cli-design.md`
+and two of its rules already shaped this surface: `show` is the dry run and `build` is the write, so
+no `--dry-run` flag exists to contradict a verb; and a build narrates to **stderr** with git's own
+stdout relayed there too, because `compare --json` has to parse.

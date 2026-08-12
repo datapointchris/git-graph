@@ -11,6 +11,7 @@ import os
 import random
 import shlex
 import subprocess
+import sys
 import textwrap
 from pathlib import Path
 from typing import NamedTuple
@@ -215,11 +216,17 @@ class GitHistory:
         # if not interactive or dry_run, print and execute all commands
 
         def _execute_and_print_next_command(command: str):
-            # Flushed before handing the terminal over, because git writes to the same
-            # descriptor directly while this print goes through Python's buffer — unflushed,
-            # the line announcing a command appears after that command's own output.
-            print(f'{Fore.BLUE}{command}{Style.RESET_ALL}', flush=True)
-            subprocess.run(command, shell=True)
+            # All of it on stderr: a run's narration is progress, not the tool's data output,
+            # and a caller asking a build for --json has to be able to parse stdout. git's own
+            # stdout is captured and relayed here rather than inherited, for the same reason.
+            #
+            # Flushed before handing the terminal over, because git's stderr goes straight to
+            # the descriptor while this print goes through Python's buffer — unflushed, the
+            # line announcing a command appears after that command's own output.
+            print(f'{Fore.BLUE}{command}{Style.RESET_ALL}', file=sys.stderr, flush=True)
+            result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, text=True)
+            if result.stdout:
+                print(result.stdout, end='', file=sys.stderr, flush=True)
 
         user_prompt = (
             f'{Fore.GREEN}[Enter]{Style.RESET_ALL} for next commit.  {Fore.GREEN}"finish"{Style.RESET_ALL} to run all remaining commands: '
@@ -247,13 +254,12 @@ class GitHistory:
                 for command in self.commands:
                     _execute_and_print_next_command(command)
         except KeyboardInterrupt:
-            print()
-            print(f'{Fore.RED}User CANCELLED{Style.RESET_ALL}')
-            print(f'{Fore.YELLOW}Cleaning Temp Files...{Style.RESET_ALL}')
+            print(f'\n{Fore.RED}User CANCELLED{Style.RESET_ALL}', file=sys.stderr)
+            print(f'{Fore.YELLOW}Cleaning Temp Files...{Style.RESET_ALL}', file=sys.stderr)
             self.delete_commit_temp_files(execute=True)
-            print(f'{Fore.YELLOW}Cleaning Repo...{Style.RESET_ALL}')
+            print(f'{Fore.YELLOW}Cleaning Repo...{Style.RESET_ALL}', file=sys.stderr)
             self.delete_repo(execute=True)
-            print(f'{Fore.GREEN}Done, Exiting{Style.RESET_ALL}')
+            print(f'{Fore.GREEN}Done, Exiting{Style.RESET_ALL}', file=sys.stderr)
 
     def init_git_repo(self):
         self.command(f'git init -b {DEFAULT_BRANCH}')
@@ -441,58 +447,3 @@ class GitHistory:
             # git's merged-check refuses -d. That refusal is the shape: squash keeps the
             # changes and discards the commits that carried them.
             self.command(f'git branch {"-D" if style is LandStyle.squash else "-d"} {branch}')
-
-
-if __name__ == '__main__':
-    with GitHistory(dry_run=False, merge_flags={MergeFlags.no_ff}) as gh:
-        delete_on_merge = True
-
-        inner_features = [
-            InnerFeature(
-                feature_name=f'base=feature target={DEFAULT_BRANCH}',
-                base_branch='feature',
-                merge_branch=DEFAULT_BRANCH,
-                merge_flags=gh.merge_flags,
-                delete_on_merge=delete_on_merge,
-            ),
-            InnerFeature(
-                feature_name='base=feature target=feature',
-                base_branch='feature',
-                merge_branch='feature',
-                merge_flags=gh.merge_flags,
-                delete_on_merge=delete_on_merge,
-            ),
-            InnerFeature(
-                feature_name=f'base={DEFAULT_BRANCH} target={DEFAULT_BRANCH}',
-                base_branch=DEFAULT_BRANCH,
-                merge_branch=DEFAULT_BRANCH,
-                merge_flags=gh.merge_flags,
-                delete_on_merge=delete_on_merge,
-            ),
-            InnerFeature(
-                feature_name=f'base={DEFAULT_BRANCH} target=feature',
-                base_branch=DEFAULT_BRANCH,
-                merge_branch='feature',
-                merge_flags=gh.merge_flags,
-                delete_on_merge=delete_on_merge,
-            ),
-        ]
-
-        gh.commit(msg='FIRST COMMIT', branch=DEFAULT_BRANCH)
-        gh.feature('experiment 01')
-        # gh.feature('MVP 02')
-        # gh.feature('refactor 01', inner_features=inner_features)
-        # gh.commit(msg='commit after refactor 01', branch=DEFAULT_BRANCH)
-        # gh.feature('new feature 03')
-        # gh.feature('refactor shit code 02', inner_features=inner_features)
-        # gh.feature('shiny feature 04')
-        # gh.feature('dumb dashboards 05', inner_features=[inner_features[0], inner_features[2]])
-        gh.commit(msg='commit before bugfix', branch=DEFAULT_BRANCH)
-        # gh.feature('bugfix cicd 06')
-        # gh.feature('huge feature 03', inner_features=[inner_features[1], inner_features[3]])
-        # gh.feature('little refactor 07')
-        gh.final_commit()
-
-        gh.write_commands_to_file('git-commands.sh')
-
-        gh.execute_commands()
