@@ -11,7 +11,10 @@ import sys
 from pathlib import Path
 
 import pytest
+import typer
 
+from git_graph.main import confirm_destroying
+from git_graph.main import resolve
 from git_graph.scenarios import SCENARIOS
 
 
@@ -59,10 +62,15 @@ def test_show_is_the_dry_run_and_writes_nothing(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
-def test_an_unknown_scenario_is_a_usage_error_listing_the_known_ones():
+def test_an_unknown_scenario_is_a_usage_error():
     result = run('scenarios', 'show', 'does-not-exist')
     assert result.returncode == 2
-    assert 'rebase-catch-up' in result.stderr
+    assert result.stdout == ''
+
+
+def test_an_unknown_scenario_names_the_known_ones():
+    with pytest.raises(typer.BadParameter, match='rebase-catch-up'):
+        resolve('does-not-exist')
 
 
 def test_comparing_a_scenario_with_itself_is_a_usage_error(tmp_path):
@@ -79,7 +87,24 @@ def test_building_over_an_existing_sandbox_needs_force_when_not_a_terminal(tmp_p
 
     assert first.returncode == 0
     assert blocked.returncode == 2
-    assert '--force' in blocked.stderr
+
+
+def test_refusing_a_rebuild_names_the_flag_that_would_allow_it(tmp_path):
+    """Asserted at the source: the same message read back off stderr is rich's rendering of it,
+    which colours the flag into `-` plus `-force` on a runner and not on a workstation."""
+    target = tmp_path / 'sandbox'
+    target.mkdir()
+    (target / 'already-here').touch()
+
+    with pytest.raises(typer.BadParameter, match='--force'):
+        confirm_destroying(target, force=False)
+
+
+def test_an_empty_target_is_rebuilt_without_asking(tmp_path):
+    target = tmp_path / 'sandbox'
+    target.mkdir()
+
+    confirm_destroying(target, force=False)
 
 
 def test_force_rebuilds_an_existing_sandbox(tmp_path):
@@ -91,10 +116,13 @@ def test_force_rebuilds_an_existing_sandbox(tmp_path):
     assert rebuilt.returncode == 0
 
 
-def test_interactive_without_a_terminal_fails_naming_the_flag(tmp_path):
-    result = run('scenarios', 'build', 'squash-land', '--target', str(tmp_path / 'sandbox'), '--interactive')
+def test_interactive_without_a_terminal_is_a_usage_error(tmp_path):
+    target = tmp_path / 'sandbox'
+
+    result = run('scenarios', 'build', 'squash-land', '--target', str(target), '--interactive')
+
     assert result.returncode == 2
-    assert '--interactive' in result.stderr
+    assert not target.exists()
 
 
 @pytest.mark.parametrize('command', [('scenarios', 'list'), ('scenarios', 'show', 'rebase-catch-up')])
