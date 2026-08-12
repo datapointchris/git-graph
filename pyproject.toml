@@ -1,20 +1,25 @@
 [project]
 name = "git-graph"
 version = "0.1.0"
-description = "Build synthetic git histories under different branching strategies, to see what merge, rebase and squash actually produce"
+description = "Build synthetic git histories from named scenarios, to see what merge, rebase, squash and worktrees actually produce"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Chris Birch", email = "datapointchris@gmail.com" }]
 requires-python = ">=3.13"
 dependencies = [
     "colorama>=0.4.6",
-    "faker>=24.11.0",
+    "rich>=13.0",
+    "typer>=0.12",
 ]
+
+[project.scripts]
+git-graph = "git_graph.main:cli"
 
 [dependency-groups]
 dev = [
     "ipython>=8.4.0",
     "pre-commit>=3.7.0",
+    "pytest>=8.0",
 ]
 
 [build-system]
