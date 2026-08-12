@@ -1,9 +1,4 @@
-"""Every assertion here reads `GitHistory.commands`, which is the tool's real output.
-
-The engine generates shell commands and executes nothing until `execute_commands()`, so
-the command list is the argv the run would issue — spying on it tests what was built
-without building a repo to find out.
-"""
+"""The engine: what it queues, and the determinism every comparison depends on."""
 
 import shlex
 
@@ -14,139 +9,114 @@ from git_graph.history import SYNTHETIC_AUTHOR_EMAIL
 from git_graph.history import CatchUpStyle
 from git_graph.history import GitHistory
 from git_graph.history import LandStyle
-from git_graph.history import MergeFlags
+from git_graph.history import branch_name
+
+
+def texts(history: GitHistory) -> list[str]:
+    return [command.text for command in history.commands]
 
 
 def test_repo_is_initialised_on_the_default_branch():
     history = GitHistory()
     history.init_git_repo()
-    assert f'git init -b {DEFAULT_BRANCH}' in history.commands
-
-
-def test_feature_branches_from_and_lands_on_the_default_branch():
-    history = GitHistory()
-    history.feature('experiment 01')
-    assert f'git checkout -b feature/experiment-01 {DEFAULT_BRANCH}' in history.commands
-    assert f'git checkout {DEFAULT_BRANCH}' in history.commands
-    assert 'git merge --no-edit feature/experiment-01' in history.commands
+    assert f'git init -b {DEFAULT_BRANCH}' in texts(history)
 
 
 def test_init_writes_an_identity_git_can_commit_with():
     history = GitHistory()
     history.init_git_repo()
-    assert [command for command in history.commands if command.startswith('git config user.email') and SYNTHETIC_AUTHOR_EMAIL in command]
+    assert [text for text in texts(history) if text.startswith('git config user.email') and SYNTHETIC_AUTHOR_EMAIL in text]
 
 
-def test_merge_flags_are_emitted_in_a_stable_order():
-    """Flags come from a set, whose iteration order is arbitrary between processes.
-
-    Sorted order is the only order two runs can agree on, and two generated scripts that
-    disagree textually cannot be diffed against each other.
-    """
-    history = GitHistory(merge_flags={MergeFlags.no_ff, MergeFlags.no_commit})
-    history.feature('experiment 01')
-    merge = next(command for command in history.commands if command.startswith('git merge'))
-    emitted_flags = merge.split()[2:-1]
-    assert emitted_flags == sorted(emitted_flags)
-
-
-def test_start_branch_leaves_the_branch_open_and_names_it():
+def test_init_creates_a_remote_to_push_at():
+    """Without one, `worktree land` cannot be modelled and a force push has nowhere to go."""
     history = GitHistory()
-    branch = history.start_branch('experiment 01')
-    assert branch == 'feature/experiment-01'
-    assert f'git checkout -b feature/experiment-01 {DEFAULT_BRANCH}' in history.commands
-    assert not [command for command in history.commands if command.startswith('git merge')]
+    history.init_git_repo()
+    assert [text for text in texts(history) if text.startswith('git init --bare')]
+    assert [text for text in texts(history) if text.startswith('git remote add')]
 
 
-def test_the_trunk_can_advance_while_a_branch_is_open():
+def test_a_commit_pins_both_dates():
+    """A hash that moves with the wall clock cannot be compared against anything."""
     history = GitHistory()
-    branch = history.start_branch('experiment 01')
-    history.advance(DEFAULT_BRANCH, commits=2)
-    assert history.commands.index(f'git checkout -b {branch} {DEFAULT_BRANCH}') < history.commands.index(f'git checkout {DEFAULT_BRANCH}')
-    assert len([command for command in history.commands if f'[{DEFAULT_BRANCH}]' in command]) == 2
+    history.commit('work')
+    commit = next(text for text in texts(history) if 'git commit' in text)
+    assert 'GIT_AUTHOR_DATE=' in commit
+    assert 'GIT_COMMITTER_DATE=' in commit
 
 
-def test_rebase_catch_up_replays_the_branch_and_records_nothing():
+def test_the_clock_advances_so_two_commits_are_never_the_same_instant():
     history = GitHistory()
-    history.catch_up('feature/experiment-01', CatchUpStyle.rebase)
-    assert history.commands == ['git checkout feature/experiment-01', f'git rebase {DEFAULT_BRANCH}']
+    history.commit('first')
+    history.commit('second')
+    stamps = {text.split('GIT_AUTHOR_DATE=')[1].split(' ')[0] for text in texts(history) if 'GIT_AUTHOR_DATE=' in text}
+    assert len(stamps) == 2
 
 
-def test_merge_catch_up_absorbs_the_trunk_with_a_commit():
+def test_a_replay_keeps_the_author_and_moves_only_the_committer():
+    """What makes a rebased commit's new hash attributable to its new parent and nothing else."""
     history = GitHistory()
-    history.catch_up('feature/experiment-01', CatchUpStyle.merge)
-    assert history.commands == ['git checkout feature/experiment-01', f'git merge --no-edit {DEFAULT_BRANCH}']
+    history.catch_up('feature/x', CatchUpStyle.rebase)
+    rebase = next(text for text in texts(history) if 'git rebase' in text)
+    assert 'GIT_COMMITTER_DATE=' in rebase
+    assert 'GIT_AUTHOR_DATE=' not in rebase
 
 
-def test_no_catch_up_touches_the_branch_at_all():
+def test_a_commit_message_never_names_the_branch_it_was_made_on():
+    """A commit fast-forwarded onto the trunk is the same commit, and has to hash the same."""
     history = GitHistory()
-    history.catch_up('feature/experiment-01', CatchUpStyle.none)
-    assert history.commands == []
-
-
-@pytest.mark.parametrize('style', list(CatchUpStyle))
-def test_catch_up_never_writes_a_commit_of_its_own(style):
-    """A marker commit would show up in every shape and destroy the comparison."""
-    history = GitHistory()
-    history.catch_up('feature/experiment-01', style)
-    assert not [command for command in history.commands if command.startswith('git commit')]
+    history.commit('refresh the session token')
+    commit = next(text for text in texts(history) if 'git commit' in text)
+    assert 'feature/' not in commit
 
 
 def test_the_merge_button_leaves_a_merge_commit_and_a_deletable_branch():
     history = GitHistory()
-    history.land('feature/experiment-01', LandStyle.merge)
-    merge = next(command for command in history.commands if command.startswith('git merge'))
-    assert merge.startswith('git merge --no-ff -m ')
-    assert 'git branch -d feature/experiment-01' in history.commands
+    history.land('feature/x', LandStyle.merge)
+    assert [text for text in texts(history) if '--no-ff' in text]
+    assert 'git branch -d -q feature/x' in texts(history)
 
 
 def test_the_squash_button_forces_the_branch_delete():
     """`-d` refuses, because the branch's own commits never reach the trunk."""
     history = GitHistory()
-    history.land('feature/experiment-01', LandStyle.squash)
-    assert 'git merge --squash feature/experiment-01' in history.commands
-    assert 'git branch -D feature/experiment-01' in history.commands
+    history.land('feature/x', LandStyle.squash)
+    assert 'git branch -D -q feature/x' in texts(history)
 
 
-def test_the_rebase_button_replays_then_fast_forwards():
+def test_worktree_land_pushes_rather_than_merging():
     history = GitHistory()
-    history.land('feature/experiment-01', LandStyle.rebase)
-    assert history.commands[:4] == [
-        'git checkout feature/experiment-01',
-        f'git rebase {DEFAULT_BRANCH}',
-        f'git checkout {DEFAULT_BRANCH}',
-        'git merge --ff-only feature/experiment-01',
-    ]
-
-
-def test_pull_requests_are_numbered_in_the_order_they_land():
-    history = GitHistory()
-    history.land('feature/one', LandStyle.squash)
-    history.land('feature/two', LandStyle.squash)
-    subjects = [command for command in history.commands if command.startswith('git commit -m')]
-    assert '(#1)' in subjects[0]
-    assert '(#2)' in subjects[1]
+    history.land('feature/x', LandStyle.fast_forward)
+    assert [text for text in texts(history) if text.startswith('git push') and 'HEAD:main' in text]
+    assert not [text for text in texts(history) if '--no-ff' in text]
 
 
 @pytest.mark.parametrize('style', list(LandStyle))
 def test_a_title_that_would_break_the_shell_survives_quoting(style):
     history = GitHistory()
-    history.land('feature/experiment-01', style, title="fix: don't break the $SHELL")
+    history.land('feature/x', style, title="fix: don't break the $SHELL")
     for command in history.commands:
-        assert shlex.split(command)
+        assert shlex.split(command.text) or command.text
 
 
-def test_a_quoted_title_reaches_git_intact():
+def test_catch_up_never_writes_a_commit_of_its_own():
+    """A marker commit would show up in every shape and destroy the comparison."""
     history = GitHistory()
-    history.land('feature/experiment-01', LandStyle.merge, title="fix: don't break the $SHELL")
-    merge = next(command for command in history.commands if command.startswith('git merge'))
-    assert "fix: don't break the $SHELL" in shlex.split(merge)
+    history.catch_up('feature/x', CatchUpStyle.rebase)
+    assert not [text for text in texts(history) if text.startswith('git commit')]
 
 
-def test_no_generated_command_mentions_master():
+def test_a_conflict_probe_counts_and_a_tolerated_command_does_not():
+    """Collapsing the two would count every harmless failure as a conflict."""
     history = GitHistory()
-    history.init_git_repo()
-    history.commit(msg='FIRST COMMIT', branch=DEFAULT_BRANCH)
-    history.feature('experiment 01')
-    history.final_commit()
-    assert not [command for command in history.commands if 'master' in command]
+    history.command('may fail harmlessly', tolerate_failure=True)
+    history.probe_stop(history.REBASE_IN_PROGRESS)
+    assert [command for command in history.commands if command.conflict_point]
+    assert [command for command in history.commands if command.tolerate_failure and not command.conflict_point]
+
+
+def test_commands_are_attributed_to_the_event_that_queued_them():
+    history = GitHistory()
+    history.begin_step('open x')
+    history.open_branch(branch_name('x'), DEFAULT_BRANCH)
+    assert history.commands[-1].step == 'open x'

@@ -1,75 +1,29 @@
-"""Scenario generation, asserted on the command list rather than on a built repo.
+"""What the built repos actually show — the findings each scenario exists to produce."""
 
-The shapes each scenario actually produces are in `test_end_to_end.py`, which builds them.
-"""
-
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from git_graph.history import CatchUpStyle
-from git_graph.history import GitHistory
-from git_graph.history import LandStyle
-from git_graph.scenarios import DEFAULT_TIMELINE
 from git_graph.scenarios import SCENARIOS
-from git_graph.scenarios import AdvanceTrunk
-from git_graph.scenarios import CatchUp
-from git_graph.scenarios import Land
-from git_graph.scenarios import OpenBranch
-from git_graph.scenarios import Scenario
 from git_graph.scenarios import find
 
 
-def events_of(kind) -> int:
-    return len([event for event in DEFAULT_TIMELINE if isinstance(event, kind)])
+def git(sandbox: Path, *args: str) -> str:
+    result = subprocess.run(['git', '-C', str(sandbox), *args], capture_output=True, text=True, check=True)
+    return result.stdout.strip()
 
 
-@pytest.mark.parametrize('scenario', SCENARIOS, ids=lambda scenario: scenario.name)
-def test_every_scenario_generates_a_runnable_command_list(scenario):
-    commands = scenario.commands()
-    assert commands[0].startswith('rm ')
-    assert 'git init -b main' in commands
+def test_scenario_names_are_unique():
+    names = [scenario.name for scenario in SCENARIOS]
+    assert len(names) == len(set(names))
 
 
-@pytest.mark.parametrize('scenario', SCENARIOS, ids=lambda scenario: scenario.name)
-def test_every_scenario_opens_and_lands_the_same_features(scenario):
-    commands = scenario.commands()
-    opened = [command for command in commands if command.startswith('git checkout -b ')]
-    deleted = [command for command in commands if command.startswith('git branch -')]
-    assert len(opened) == events_of(OpenBranch)
-    assert len(deleted) == events_of(Land)
-
-
-def test_the_timeline_moves_the_trunk_under_every_open_branch():
-    """A catch-up with nothing to absorb compares two strategies on a history where neither acts."""
-    assert events_of(AdvanceTrunk) > 0
-    assert events_of(CatchUp) == events_of(OpenBranch)
-
-
-def test_rebasing_to_catch_up_emits_no_merge_for_the_catch_up():
-    commands = find('rebase-catch-up').commands()
-    assert len([command for command in commands if command.startswith('git rebase')]) == events_of(CatchUp)
-
-
-def test_merging_to_catch_up_emits_one_merge_per_catch_up():
-    commands = find('merge-catch-up').commands()
-    catch_up_merges = [command for command in commands if command == 'git merge --no-edit main']
-    assert len(catch_up_merges) == events_of(CatchUp)
-
-
-def test_not_catching_up_emits_neither():
-    commands = find('no-catch-up').commands()
-    assert not [command for command in commands if command.startswith('git rebase')]
-    assert not [command for command in commands if command == 'git merge --no-edit main']
-
-
-def test_generating_commands_touches_nothing_on_disk(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-
-    commands = find('rebase-catch-up').commands()
-
-    assert commands
-    assert list(tmp_path.iterdir()) == []
+def test_every_declared_partner_exists():
+    """A `compare with` naming nothing is a dead end printed on every listing."""
+    for scenario in SCENARIOS:
+        if scenario.compare_with:
+            assert find(scenario.compare_with)
 
 
 def test_an_unknown_scenario_names_the_known_ones():
@@ -77,18 +31,69 @@ def test_an_unknown_scenario_names_the_known_ones():
         find('does-not-exist')
 
 
-def test_landing_a_feature_no_event_opened_names_the_feature():
-    scenario = Scenario(
-        name='broken',
-        description='Lands a branch that was never opened.',
-        catch_up=CatchUpStyle.none,
-        land=LandStyle.merge,
-        timeline=(Land('never opened'),),
-    )
-    with pytest.raises(ValueError, match='never opened'):
-        scenario.generate(GitHistory(target_dir=Path('unused')))
+def test_generating_commands_touches_nothing_on_disk(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert find('rebase-catch-up').commands()
+    assert list(tmp_path.iterdir()) == []
 
 
-def test_scenario_names_are_unique():
-    names = [scenario.name for scenario in SCENARIOS]
-    assert len(names) == len(set(names))
+@pytest.mark.parametrize('name', ['rebase-catch-up', 'squash-land', 'rebase-land', 'conflict-rebase'])
+def test_a_landed_branch_is_gone_and_the_trunk_is_checked_out(tmp_path, build, name):
+    sandbox, _, _ = build(name, tmp_path / name)
+    assert git(sandbox, 'branch', '--list', 'feature/*') == ''
+    assert git(sandbox, 'rev-parse', '--abbrev-ref', 'HEAD') == 'main'
+
+
+def test_squashing_keeps_the_changes_and_discards_the_commits(tmp_path, build):
+    sandbox, fingerprint, _ = build('squash-land', tmp_path / 'squash')
+    subjects = git(sandbox, 'log', '--format=%s', 'main')
+    assert fingerprint.counts.merges == 0
+    assert 'session token refresh 1' not in subjects
+    assert '(#1)' in subjects
+
+
+def test_rebasing_to_land_keeps_every_commit_on_a_linear_trunk(tmp_path, build):
+    sandbox, fingerprint, _ = build('rebase-land', tmp_path / 'rebase')
+    assert fingerprint.counts.merges == 0
+    assert 'session token refresh 1' in git(sandbox, 'log', '--format=%s', 'main')
+
+
+def test_a_rebase_stops_and_a_merge_stops_once(tmp_path, build):
+    """The cost the finished graph records nowhere, which is why the run is measured too."""
+    _, _, rebasing = build('conflict-rebase', tmp_path / 'rebase')
+    _, _, merging = build('conflict-merge', tmp_path / 'merge')
+    assert rebasing.stops >= 1
+    assert merging.stops == 1
+
+
+def test_resolving_a_rebase_toward_the_trunk_discards_the_branch(tmp_path, build):
+    """`--ours` during a rebase means the branch you are replaying onto, not your own work."""
+    kept, _, _ = build('conflict-rebase', tmp_path / 'kept')
+    lost, _, _ = build('conflict-keep-trunk', tmp_path / 'lost')
+    assert 'limit = 200' in git(kept, 'show', 'main:config.txt')
+    assert 'limit = 50' in git(lost, 'show', 'main:config.txt')
+
+
+def test_a_cherry_pick_copies_content_under_a_new_hash(tmp_path, build):
+    sandbox, _, _ = build('cherry-pick', tmp_path / 'cherry')
+    subjects = git(sandbox, 'log', '--all', '--format=%s')
+    assert subjects.count('patch the leak') == 2
+
+
+def test_a_revert_adds_an_inverse_rather_than_removing_anything(tmp_path, build):
+    sandbox, _, _ = build('revert', tmp_path / 'revert')
+    subjects = git(sandbox, 'log', '--format=%s', 'main')
+    assert 'the regression' in subjects
+    assert 'Revert' in subjects
+
+
+def test_an_abandoned_branch_leaves_its_commits_unreachable(tmp_path, build):
+    sandbox, fingerprint, _ = build('abandoned-branch', tmp_path / 'abandoned')
+    assert 'spike' not in git(sandbox, 'log', '--all', '--format=%s')
+    assert fingerprint.counts.branches == 1
+
+
+def test_a_stacked_branch_still_lands_after_its_base_is_squashed(tmp_path, build):
+    sandbox, _, _ = build('stacked-on-squash', tmp_path / 'stacked')
+    assert git(sandbox, 'branch', '--list', 'feature/*') == ''
+    assert 'cli 1' in git(sandbox, 'log', '--format=%s', 'main')

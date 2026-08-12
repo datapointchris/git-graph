@@ -1,49 +1,64 @@
-"""The generator: accumulates git commands into a list and executes nothing until told to.
+"""The generator: accumulates git commands and executes nothing until told to.
 
 That split is the whole design. Because a run exists as text before it exists as a repo, it
 can be printed without running, stepped through one commit at a time, or written out as a
 re-runnable script — and anything that shells out directly instead of appending here
 silently loses all three.
+
+Everything it emits is **deterministic**: fixed file content, fixed messages, and a clock
+that advances one minute per commit rather than reading the wall. Two scenarios doing the
+same work therefore produce byte-identical object hashes, which is the whole basis of
+`scenarios compare` — without it, every comparison stops at "same shape" and can never
+answer whether two histories are the same *objects*. It is also what makes a rebase legible:
+the replayed commit gets a new hash because its parent changed, and for no other reason.
 """
 
+import datetime as dt
 import enum
 import os
-import random
 import shlex
 import subprocess
 import sys
-import textwrap
+from dataclasses import dataclass
 from pathlib import Path
-from typing import NamedTuple
 
 from colorama import Fore
 from colorama import Style
-from faker import Faker
 
 DEFAULT_BRANCH = 'main'
 """The trunk every generated history branches from and lands on.
 
-Named here rather than defaulted per call site so `git init -b` and the branch a
-feature targets cannot disagree — `git init` alone takes whatever `init.defaultBranch`
-the machine happens to carry, which is `master` on an unconfigured one.
+Named here rather than defaulted per call site so `git init -b` and the branch a feature
+targets cannot disagree — `git init` alone takes whatever `init.defaultBranch` the machine
+happens to carry, which is `master` on an unconfigured one.
+"""
+
+REMOTE_NAME = 'origin'
+REMOTE_DIR = 'origin.git'
+"""A bare repo inside the sandbox, so pushing is real rather than approximated.
+
+`worktree land` is `git push origin HEAD:main`, and the fleet's rebase rule turns on the
+force push being the rebase reaching the remote rather than a workaround for it. Neither is
+modelable without somewhere to push, and both are the point of the scenarios that use them.
 """
 
 SYNTHETIC_AUTHOR_NAME = 'git-graph'
 SYNTHETIC_AUTHOR_EMAIL = 'git-graph@localhost'
 """Identity written into the sandbox so a generated script commits on any machine.
 
-git refuses to commit without a `user.email`, and a fresh CI runner has none — so a
-script that relies on the ambient identity builds a repo on a workstation and fails
-everywhere else. A synthetic repo has a synthetic author.
+git refuses to commit without a `user.email`, and a fresh CI runner has none. Fixed rather
+than borrowed, because a hash that depends on who ran it cannot be compared.
 """
+
+BASE_DATE = dt.datetime(2026, 1, 1, 9, 0, tzinfo=dt.UTC)
+"""Origin of the deterministic clock. Any fixed instant would do; this one reads plausibly."""
 
 SANDBOX_MARKER = '.git-graph-sandbox'
 """Proof that a directory belongs to this tool, checked before anything destructive.
 
-Three paths reach `rm -rf .git`: the context manager, the KeyboardInterrupt cleanup,
-and the emitted script. The script is the dangerous one — it carries the command as a
-plain line and runs wherever it is invoked from, which is what the README's `.git`
-recovery note is about.
+Three paths reach `rm -rf .git`: the context manager, the KeyboardInterrupt cleanup, and the
+emitted script. The script is the dangerous one — it carries the command as a plain line and
+runs wherever it is invoked from, which is what the README's `.git` recovery note is about.
 """
 
 SCRIPT_PREAMBLE = f"""#!/usr/bin/env bash
@@ -60,17 +75,16 @@ fi
 def quoted(text: str) -> str:
     """Shell-quote text going into a generated command.
 
-    Every command is a plain line that the emitted script runs through a shell, so a
-    scenario named `don't` or a PR body with a backtick in it produces a script the shell
-    cannot parse at all — and it fails at run time, in the sandbox, long after the text was
-    chosen.
+    Every command is a plain line that the emitted script runs through a shell, so a scenario
+    named `don't` or a body with a backtick in it produces a script the shell cannot parse at
+    all — failing at run time, in the sandbox, long after the text was chosen.
     """
     return shlex.quote(text)
 
 
-def feature_branch_name(feature_name: str, long_lived: bool = False) -> str:
+def branch_name(feature: str) -> str:
     """Branch name for a feature, so the generator and its callers cannot disagree on it."""
-    return f'{"long-feature" if long_lived else "feature"}/{feature_name.replace(" ", "-")}'
+    return f'feature/{feature.replace(" ", "-")}'
 
 
 def in_sandbox() -> bool:
@@ -80,9 +94,8 @@ def in_sandbox() -> bool:
 def prepare_sandbox(target_dir: Path) -> Path:
     """Resolve the target directory, creating it, and refuse anywhere holding real work.
 
-    Refuses a non-empty directory without the marker rather than only checking for
-    `.git`: a scratch directory full of unrelated files is not a safe thing to run
-    `rm -rf` inside either.
+    Refuses a non-empty directory without the marker rather than only checking for `.git`: a
+    scratch directory full of unrelated files is not a safe thing to run `rm -rf` inside.
     """
     target = target_dir.resolve()
     # parents[2] under the src layout: history.py, git_graph/, src/, then the repo.
@@ -96,23 +109,28 @@ def prepare_sandbox(target_dir: Path) -> Path:
     return target
 
 
-class MergeFlags(enum.Enum):
-    no_edit = '--no-edit'  # do not open editor to edit commit message
-    no_ff = '--no-ff'  # do not fast-forward merge
-    no_commit = '--no-commit'  # perform the merge but do not commit
-    squash = '--squash'  # gather changes from all commits and put in staging, requires a subsequent squash commit
+class MergeFlags(enum.StrEnum):
+    """git's own merge verbs, which are not GitHub's buttons — see `LandStyle`."""
+
+    no_edit = '--no-edit'
+    no_ff = '--no-ff'
+    no_commit = '--no-commit'
+    squash = '--squash'
 
 
 class LandStyle(enum.StrEnum):
-    """How a pull request reaches the trunk — GitHub's three merge buttons.
+    """How a branch reaches the trunk.
 
-    Not their local namesakes, which is the point of modelling them separately: the graph
-    that matters is the one in the repo. `merge` leaves the branch as a visible bubble with
-    both parents; `squash` collapses it into one new commit and the branch is gone; `rebase`
-    replays its commits onto the trunk with new SHAs and committer dates, and the branch is
-    gone too.
+    The first three are GitHub's merge buttons, modelled rather than their local namesakes
+    because the graph that matters is the one in the repo. `merge` leaves the branch as a
+    visible bubble with both parents; `squash` collapses it into one new commit and the
+    branch's own commits never reach the trunk; `rebase` replays them with new hashes.
 
-    `merge` is modelled with the fleet's own settings — `merge_commit_title=PR_TITLE` and
+    `fast_forward` is not a button — it is `worktree land`, which rebases and pushes
+    `HEAD:main`. It produces no merge commit and no new commit of its own, so one commit
+    stays one commit, which is the entire claim the worktree workflow rests on.
+
+    `merge` carries the fleet's own settings — `merge_commit_title=PR_TITLE` and
     `merge_commit_message=PR_BODY`, per forge's sync-merge-settings.sh — rather than
     GitHub's `Merge pull request #N from ...` default.
     """
@@ -120,14 +138,15 @@ class LandStyle(enum.StrEnum):
     merge = 'merge'
     squash = 'squash'
     rebase = 'rebase'
+    fast_forward = 'fast-forward'
 
 
 class CatchUpStyle(enum.StrEnum):
     """How an open branch absorbs commits that landed on the trunk after it opened.
 
-    The variable under test. `rebase` replays the branch's own commits onto the new tip,
-    leaving it a clean linear sequence with nothing recording the catch-up; `merge` adds a
-    merge commit per absorption and one crossing per catch-up in the graph.
+    `rebase` replays the branch's own commits onto the new tip, leaving it linear with
+    nothing recording the catch-up; `merge` adds a merge commit per absorption and one
+    crossing per catch-up in the graph.
     """
 
     rebase = 'rebase'
@@ -135,40 +154,69 @@ class CatchUpStyle(enum.StrEnum):
     none = 'none'
 
 
-class InnerFeature(NamedTuple):
-    feature_name: str
-    base_branch: str
-    merge_branch: str
-    merge_flags: set[MergeFlags] | None
-    delete_on_merge: bool
+class Resolution(enum.StrEnum):
+    """Which side of a conflict to keep, spelled as git spells it.
+
+    Deliberately git's own words rather than clearer ones, because the confusing part is
+    worth meeting head on: during a **rebase** `--ours` is the branch you are replaying
+    *onto* and `--theirs` is your own work, which is the exact reverse of a **merge**. A
+    scenario that resolves the same way through both operations keeps different content, and
+    that is a thing to see rather than be told.
+    """
+
+    ours = 'ours'
+    theirs = 'theirs'
+
+
+@dataclass(frozen=True)
+class Command:
+    """One shell line, and what the run should make of it failing.
+
+    Two separate questions, deliberately not one flag. `tolerate_failure` says the run carries
+    on regardless — a resolution step that finds nothing to resolve has failed harmlessly.
+    `conflict_point` says failing here *is* the measurement: a rebase that stopped. Collapsing
+    them would count every harmless failure as a conflict and make the one number the graph
+    cannot show into the one number you cannot trust.
+    """
+
+    text: str
+    step: str = ''
+    tolerate_failure: bool = False
+    conflict_point: bool = False
+
+
+@dataclass(frozen=True)
+class CommandResult:
+    command: Command
+    exit_code: int
+
+    @property
+    def is_stop(self) -> bool:
+        """A command that failed where failing is the thing being measured — a conflict stop."""
+        return self.exit_code != 0 and self.command.conflict_point
 
 
 class GitHistory:
-    """
-    Use context manager to automate deleting and creating git repo
-    and deleting temp files created during the process.
-    """
-
-    TEMP_FILE_PREFIX = 'temp_py_file_'  # Used in commits
+    """Builds a run as text, then optionally executes it inside a sandbox."""
 
     def __init__(
         self,
         interactive: bool = False,
         dry_run: bool = False,
-        merge_flags: set[MergeFlags] | None = None,
         target_dir: Path = Path('target/'),
     ):
         self.interactive = interactive
         self.dry_run = dry_run
-        self.merge_flags = merge_flags
         self.target_dir = target_dir
-        # Captured before any chdir so a relative target always resolves against where
-        # the caller stood. Building a second scenario after a first would otherwise
-        # resolve `target/` inside the first one's sandbox and nest them.
+        # Captured before any chdir so a relative target always resolves against where the
+        # caller stood. Building a second scenario after a first would otherwise resolve
+        # `target/` inside the first one's sandbox and nest them.
         self.origin_dir = Path.cwd()
+        self.commands: list[Command] = []
+        self.results: list[CommandResult] = []
+        self.current_step = ''
+        self.clock = 0
         self.pull_request_number = 0
-        self.fake = Faker(use_weighting=False)
-        self.commands: list[str] = []
         if self.interactive and self.dry_run:
             raise ValueError('Cannot be interactive on a dry run')
 
@@ -179,234 +227,243 @@ class GitHistory:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.delete_commit_temp_files(execute=True)  # while still inside the sandbox the marker guards
         self.change_directory(self.origin_dir)
-        # Do not delete repo on exit or history is lost and cannot be visualized
+        # Do not delete the repo on exit, or the history is lost and cannot be looked at
 
-    def generate_preamble(self):
+    def change_directory(self, directory: Path):
+        os.chdir(directory)
+
+    def begin_step(self, label: str) -> None:
+        """Attribute the commands that follow to one timeline event, for the run report."""
+        self.current_step = label
+
+    def command(self, text: str, tolerate_failure: bool = False, conflict_point: bool = False) -> None:
+        self.commands.append(
+            Command(
+                text=text,
+                step=self.current_step,
+                tolerate_failure=tolerate_failure or conflict_point,
+                conflict_point=conflict_point,
+            )
+        )
+
+    def stamp(self) -> str:
+        """The next instant on the deterministic clock."""
+        moment = BASE_DATE + dt.timedelta(minutes=self.clock)
+        self.clock += 1
+        return moment.isoformat()
+
+    def authored(self, text: str) -> str:
+        """Pin both dates: this command creates a commit that did not exist before."""
+        moment = self.stamp()
+        return f'GIT_AUTHOR_DATE={quoted(moment)} GIT_COMMITTER_DATE={quoted(moment)} {text}'
+
+    def committed(self, text: str) -> str:
+        """Pin only the committer date: this command replays commits that keep their author.
+
+        Which is what makes a replayed commit's new hash attributable to its new parent — the
+        author half of its identity is carried over exactly as a real rebase carries it.
+        """
+        return f'GIT_COMMITTER_DATE={quoted(self.stamp())} {text}'
+
+    def write_commands_to_file(self, filename: str) -> None:
+        lines = [SCRIPT_PREAMBLE]
+        step = None
+        for command in self.commands:
+            if command.step != step:
+                step = command.step
+                lines.append(f'\n# {step}\n' if step else '\n')
+            lines.append(f'{command.text} || true\n' if command.tolerate_failure else f'{command.text}\n')
+        path = Path(filename)
+        path.write_text(''.join(lines))
+        path.chmod(0o755)
+
+    def execute_commands(self) -> list[CommandResult]:
+        """Run the queued commands, recording the exit code of each.
+
+        The exit codes are data: a conflict is a rebase that failed, and counting those is the
+        only way to report a cost the finished graph does not record.
+        """
+
+        def run(command: Command) -> None:
+            # All of it on stderr: a run's narration is progress, not the tool's data output,
+            # and a caller asking a build for --json has to be able to parse stdout. git's own
+            # stdout is captured and relayed here rather than inherited, for the same reason.
+            print(f'{Fore.BLUE}{command.text}{Style.RESET_ALL}', file=sys.stderr, flush=True)
+            completed = subprocess.run(command.text, shell=True, stdout=subprocess.PIPE, text=True)
+            if completed.stdout:
+                print(completed.stdout, end='', file=sys.stderr, flush=True)
+            self.results.append(CommandResult(command=command, exit_code=completed.returncode))
+
+        user_prompt = f'{Fore.GREEN}[Enter]{Style.RESET_ALL} for next commit, {Fore.GREEN}"finish"{Style.RESET_ALL} to run the rest: '
+        try:
+            if self.dry_run:
+                for command in self.commands:
+                    print(f'{Fore.BLUE}{command.text}{Style.RESET_ALL}')
+            elif self.interactive:
+                stepping = True
+                for command in self.commands:
+                    run(command)
+                    if stepping and command.text.startswith(('git commit', 'git merge', 'git rebase')):
+                        stepping = input(user_prompt).strip() != 'finish'
+            else:
+                for command in self.commands:
+                    run(command)
+        except KeyboardInterrupt:
+            print(f'\n{Fore.RED}User CANCELLED{Style.RESET_ALL}', file=sys.stderr)
+            print(f'{Fore.YELLOW}Cleaning Repo...{Style.RESET_ALL}', file=sys.stderr)
+            self.delete_repo(execute=True)
+            print(f'{Fore.GREEN}Done, Exiting{Style.RESET_ALL}', file=sys.stderr)
+        return self.results
+
+    @property
+    def stops(self) -> int:
+        """How many times the run had to stop and be repaired. Not visible in the finished graph."""
+        return len([result for result in self.results if result.is_stop])
+
+    def step_summary(self) -> list[tuple[str, int, int]]:
+        """(event, commands it took, times git stopped) in timeline order."""
+        summary: dict[str, list[int]] = {}
+        for result in self.results:
+            counts = summary.setdefault(result.command.step, [0, 0])
+            counts[0] += 1
+            counts[1] += int(result.is_stop)
+        return [(label, commands, stops) for label, (commands, stops) in summary.items()]
+
+    def generate_preamble(self) -> None:
         """Queue the teardown and init every run starts with.
 
         Separate from `__enter__` so a caller that only wants to read the commands gets the
         same list as one that builds — without a sandbox, a chdir, or anything on disk.
         """
-        self.delete_commit_temp_files()
+        self.begin_step('setup')
         self.delete_repo()
+        self.command('rm -f ./*.txt')
         self.init_git_repo()
 
-    def change_directory(self, directory: Path):
-        os.chdir(directory)
-
-    def commit_prefix(self):
-        prefixes = ['feat', 'fix', 'docs', 'style', 'refactor', 'perf', 'test', 'chore', 'ops', 'build']
-        weights = [20, 6, 3, 1, 3, 1, 6, 4, 2, 1]
-        return random.choices(prefixes, weights=weights)[0]
-
-    def command(self, command: str):
-        self.commands.append(command)
-
-    def write_commands_to_file(self, filename: str):
-        path = Path(filename)
-        path.write_text(SCRIPT_PREAMBLE + textwrap.dedent('\n'.join(self.commands)) + '\n')
-        path.chmod(0o755)
-
-    def execute_commands(self):
-        # if interactive, print and execute commands only stopping at commits or merges
-        #   if user enters 'finish', execute all remaining commands
-        # if dry_run, print commands only
-        # if not interactive or dry_run, print and execute all commands
-
-        def _execute_and_print_next_command(command: str):
-            # All of it on stderr: a run's narration is progress, not the tool's data output,
-            # and a caller asking a build for --json has to be able to parse stdout. git's own
-            # stdout is captured and relayed here rather than inherited, for the same reason.
-            #
-            # Flushed before handing the terminal over, because git's stderr goes straight to
-            # the descriptor while this print goes through Python's buffer — unflushed, the
-            # line announcing a command appears after that command's own output.
-            print(f'{Fore.BLUE}{command}{Style.RESET_ALL}', file=sys.stderr, flush=True)
-            result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, text=True)
-            if result.stdout:
-                print(result.stdout, end='', file=sys.stderr, flush=True)
-
-        user_prompt = (
-            f'{Fore.GREEN}[Enter]{Style.RESET_ALL} for next commit.  {Fore.GREEN}"finish"{Style.RESET_ALL} to run all remaining commands: '
-        )
-        try:
-            if self.interactive:
-                user_cmd = None
-                for command in self.commands:
-                    if not command.startswith(('git commit', 'git merge')):  # only stop and wait on commits or merges
-                        _execute_and_print_next_command(command)
-                        continue
-                    else:
-                        while user_cmd != 'finish':
-                            _execute_and_print_next_command(command)
-                            user_cmd = input(user_prompt)
-                            if user_cmd == '':
-                                break
-                        else:
-                            _execute_and_print_next_command(command)
-            elif self.dry_run:
-                for command in self.commands:
-                    print(f'{Fore.BLUE}{command}{Style.RESET_ALL}')
-                    print()
-            else:
-                for command in self.commands:
-                    _execute_and_print_next_command(command)
-        except KeyboardInterrupt:
-            print(f'\n{Fore.RED}User CANCELLED{Style.RESET_ALL}', file=sys.stderr)
-            print(f'{Fore.YELLOW}Cleaning Temp Files...{Style.RESET_ALL}', file=sys.stderr)
-            self.delete_commit_temp_files(execute=True)
-            print(f'{Fore.YELLOW}Cleaning Repo...{Style.RESET_ALL}', file=sys.stderr)
-            self.delete_repo(execute=True)
-            print(f'{Fore.GREEN}Done, Exiting{Style.RESET_ALL}', file=sys.stderr)
-
-    def init_git_repo(self):
+    def init_git_repo(self) -> None:
         self.command(f'git init -b {DEFAULT_BRANCH}')
         self.command(f'git config user.name {quoted(SYNTHETIC_AUTHOR_NAME)}')
         self.command(f'git config user.email {quoted(SYNTHETIC_AUTHOR_EMAIL)}')
-        self.command('touch __init__.py')
-        self.command("""echo "__version__ = '0.1.0'" > __init__.py""")
+        # The marker and the bare remote live in the work tree, so `git add -A` would commit
+        # them. Excluded through .git/info/exclude rather than a .gitignore, which would be a
+        # file in every generated history that no scenario asked for.
+        self.command(f'printf {quoted(f"{SANDBOX_MARKER}\n{REMOTE_DIR}/\ngit-commands.sh\n")} > .git/info/exclude')
+        self.command(f'git init --bare -b {DEFAULT_BRANCH} {REMOTE_DIR}')
+        self.command(f'git remote add {REMOTE_NAME} ./{REMOTE_DIR}')
+        self.write_file('README.txt', 'A synthetic repo built by git-graph.')
         self.command('git add -A')
-        self.command('git commit -m "init: Initial Project"')
+        self.command(self.authored('git commit -m "init: initial commit"'))
+        self.command(f'git push -q {REMOTE_NAME} {DEFAULT_BRANCH}')
 
-    def delete_commit_temp_files(self, execute=False):
-        command = f'rm {self.TEMP_FILE_PREFIX}*.py > /dev/null 2>&1; rm __init__.py > /dev/null 2>&1'
-        if execute:  # execute command directly when cleaning up after KeyboardInterrupt
+    def delete_repo(self, execute: bool = False) -> None:
+        command = f'rm -rf .git {REMOTE_DIR}'
+        if execute:  # run directly when cleaning up after a KeyboardInterrupt
             self.run_destructive(command)
         else:
             self.command(command)
 
-    def delete_repo(self, execute=False):
-        command = 'rm -rf .git'
-        if execute:  # execute command directly when cleaning up after KeyboardInterrupt
-            self.run_destructive(command)
-        else:
-            self.command(command)
-
-    def run_destructive(self, command: str):
+    def run_destructive(self, command: str) -> None:
         """Run immediately, but only where the marker proves we are in a sandbox.
 
-        The cleanup paths bypass `self.commands`, so they also bypass the guard the
-        emitted script carries. Without this, constructing GitHistory outside the
-        context manager — where no chdir has happened — deletes from the caller's cwd.
+        The cleanup path bypasses `self.commands`, so it also bypasses the guard the emitted
+        script carries. Without this, constructing GitHistory outside the context manager —
+        where no chdir has happened — deletes from the caller's cwd.
         """
         if not in_sandbox():
             raise SystemExit(f'refusing to run {command!r} outside a git-graph sandbox')
         subprocess.run(command, shell=True)
 
-    def commit(self, msg: str, branch: str):
-        self.command(f'echo {quoted(self.fake.iso8601())} >> {self.TEMP_FILE_PREFIX}{self.fake.swift11()}.py')
-        self.command('git add -A')
-        self.command(f'git commit -m {quoted(f"{self.commit_prefix()}: [{branch}] {msg}")}')
+    def write_file(self, path: str, content: str) -> None:
+        self.command(f'printf {quoted(content + "\n")} > {path}')
 
-    def final_commit(self):
-        self.delete_commit_temp_files()
-        self.command('git add -A')
-        self.command(f'git commit -m {quoted(f"chore: [{DEFAULT_BRANCH}] FINAL COMMIT: Deleted all temp files")}')
+    def checkout(self, ref: str) -> None:
+        self.command(f'git checkout -q {ref}')
 
-    def feature(
-        self,
-        feature_name: str,
-        base_branch: str = DEFAULT_BRANCH,
-        merge_branch: str = DEFAULT_BRANCH,
-        merge_flags: set[MergeFlags] | None = None,
-        delete_on_merge: bool = True,
-        inner_features: list[InnerFeature] | None = None,
-    ):
-        inner_features = inner_features or []
-        # Copied, not aliased. `merge_flags or self.merge_flags` hands back the
-        # caller's own set, so the no_edit below would add itself to the instance
-        # default — and __main__ passes gh.merge_flags into every InnerFeature,
-        # which makes one feature's flags leak into all the others.
-        merge_flags = set(merge_flags or self.merge_flags or ())
-        merge_flags.add(MergeFlags.no_edit)  # Always no-edit
-        # Sorted, because a set's iteration order varies between runs: unsorted, the same
-        # scenario emits `--no-edit --no-ff` one run and `--no-ff --no-edit` the next, and
-        # two generated scripts that differ textually cannot be diffed against each other.
-        parsed_flags = ' '.join(sorted(flag.value for flag in merge_flags))
-        squash_branch = '--squash' in parsed_flags
+    def commit(self, message: str, touches: str | None = None, content: str | None = None) -> None:
+        """One commit, with deterministic content so its hash is a function of its history alone.
 
-        feature_name = feature_name.replace(' ', '-')
-        this_branch = feature_branch_name(feature_name, long_lived=bool(inner_features))
+        The message deliberately does **not** name the branch. A commit made on a branch and
+        fast-forwarded onto the trunk is the same commit either way, and a message carrying the
+        branch it happened to be typed on would make it a different one — which would hide the
+        single most useful thing this tool can show about a worktree.
 
-        create_feature_branch = f'git checkout -b {this_branch} {base_branch}'
-        checkout_this_branch = f'git checkout {this_branch}'
-        checkout_target_branch = f'git checkout {merge_branch}'
-        merge_this_branch = f'git merge {parsed_flags} {this_branch}'
-
-        # Create feature branch
-        self.command(create_feature_branch)
-
-        # Add Commits that show commands to visualize in graph
-        self.commit(msg=create_feature_branch, branch=this_branch)
-        self.commit(msg='regular commit', branch=this_branch)
-
-        if inner_features:
-            for inf in inner_features:
-                self.feature(
-                    feature_name=inf.feature_name,
-                    base_branch=this_branch if inf.base_branch == 'feature' else inf.base_branch,
-                    merge_branch=this_branch if inf.merge_branch == 'feature' else inf.merge_branch,
-                    merge_flags=inf.merge_flags,
-                    delete_on_merge=inf.delete_on_merge,
-                )
-                # Add commits to long feature branch between features for testing variance
-                self.command(checkout_this_branch)
-                self.commit(msg=checkout_this_branch, branch=this_branch)
-                self.commit(msg='regular commit', branch=this_branch)
-
-            # Final long feature commit if inner features
-            self.commit(msg=f'FINISH LONG FEATURE: {feature_name}', branch=this_branch)
-
-        # Add Commits that show commands to visualize in graph
-        self.commit(msg=checkout_target_branch, branch=this_branch)
-        self.commit(msg=merge_this_branch, branch=this_branch)
-
-        # Merge feature branch into target branch
-        self.command(checkout_target_branch)
-        self.command(merge_this_branch)
-
-        if squash_branch:  # Squash commit required if branch is squashed
-            self.command(f'git commit -m {quoted(f"feat: {feature_name} SQUASHED")}')
-
-        if delete_on_merge:  # must -D force delete if squashed
-            self.command(f'git branch {"-D" if squash_branch else "-d"} {this_branch}')
-
-    def start_branch(self, feature_name: str, base_branch: str = DEFAULT_BRANCH, commits: int = 2) -> str:
-        """Open a feature branch, leave it checked out, and return its name.
-
-        Split out of `feature()` so a branch can stay open while the trunk moves under it.
-        `feature()` opens and lands in one call, which is why no history it builds has ever
-        had anything to catch up to.
+        `touches` names a file two branches can both write, which is the only way a conflict can
+        arise here: by default every commit gets a file of its own, and a file nobody else
+        writes never conflicts.
         """
-        branch = feature_branch_name(feature_name)
-        self.command(f'git checkout -b {branch} {base_branch}')
-        self.advance(branch, commits=commits)
-        return branch
+        path = touches or f'work-{self.clock:02d}.txt'
+        self.write_file(path, content if content is not None else message)
+        self.command('git add -A')
+        self.command(self.authored(f'git commit -q -m {quoted(message)}'))
 
-    def advance(self, branch: str, commits: int = 1) -> None:
-        """Add commits to a branch — including the trunk, which is what makes catch-up mean anything."""
-        self.command(f'git checkout {branch}')
-        for _ in range(commits):
-            self.commit(msg='regular commit', branch=branch)
+    def open_branch(self, branch: str, base: str) -> None:
+        self.command(f'git checkout -q -b {branch} {base}')
+
+    REBASE_IN_PROGRESS = '[ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]'
+    MERGE_IN_PROGRESS = '[ -f .git/MERGE_HEAD ]'
 
     def catch_up(self, branch: str, style: CatchUpStyle, onto: str = DEFAULT_BRANCH) -> None:
         """Absorb the trunk into an open branch.
 
-        Deliberately emits no annotating commit, unlike `feature()`. Whether a catch-up
-        leaves a commit behind is the difference being measured — a marker commit written
-        by the tool would show up in both shapes and destroy the comparison.
+        Deliberately emits no annotating commit, unlike a landing. Whether a catch-up leaves a
+        commit behind is the difference being measured — a marker commit written by the tool
+        would show up in both shapes and destroy the comparison.
         """
         match style:
             case CatchUpStyle.rebase:
-                self.command(f'git checkout {branch}')
-                self.command(f'git rebase {onto}')
+                self.checkout(branch)
+                self.command(self.committed(f'git rebase -q {onto}'), tolerate_failure=True)
             case CatchUpStyle.merge:
-                self.command(f'git checkout {branch}')
-                self.command(f'git merge --no-edit {onto}')
+                self.checkout(branch)
+                self.command(self.authored(f'git merge --no-edit -q {onto}'), tolerate_failure=True)
             case CatchUpStyle.none:
                 return
+
+    def probe_stop(self, in_progress: str) -> None:
+        """Ask git whether it is still waiting for a human, and count the answer.
+
+        Written inverted — it *fails* when an operation is still in progress — so that one
+        notion of "a stop" covers both. The count cannot be predicted from the timeline: a
+        rebase resolved in the branch's favour conflicts once and then applies cleanly, and the
+        same rebase resolved the other way conflicts on every commit. That difference is a thing
+        to measure, not to assume, so the probe is the measurement and the rounds below are
+        merely an upper bound.
+        """
+        self.command(f'! ( {in_progress} )', tolerate_failure=True, conflict_point=True)
+
+    def resolve_rebase(self, resolution: Resolution, rounds: int) -> None:
+        """Take one side of each conflict a rebase stops on, then continue, until it runs out.
+
+        `rounds` is an upper bound rather than a prediction — a round that finds no rebase in
+        progress does nothing and exits clean, so over-estimating costs a no-op and never a
+        wrong number. `--skip` handles the case that makes resolving toward the trunk so
+        destructive: a commit whose changes were all discarded has nothing left to apply, and
+        git will not continue with an empty commit.
+        """
+        resolve = f'git checkout --{resolution} -- . 2>/dev/null; git add -A'
+        continue_or_skip = f'{self.committed("git -c core.editor=true rebase --continue")} || git rebase --skip'
+        for _ in range(rounds):
+            self.probe_stop(self.REBASE_IN_PROGRESS)
+            self.command(f'if {self.REBASE_IN_PROGRESS}; then {resolve}; {continue_or_skip}; fi', tolerate_failure=True)
+
+    def resolve_merge(self, resolution: Resolution, message: str) -> None:
+        """Take one side of a merge conflict and commit it.
+
+        One round, and that is the finding rather than a simplification: a merge presents every
+        conflicting file at once and stops exactly once, however many commits contributed to it.
+        """
+        self.probe_stop(self.MERGE_IN_PROGRESS)
+        resolve = f'git checkout --{resolution} -- . 2>/dev/null; git add -A'
+        commit = self.authored(f'git commit -q --no-edit -m {quoted(message)}')
+        self.command(f'if {self.MERGE_IN_PROGRESS}; then {resolve}; {commit}; fi', tolerate_failure=True)
+
+    def merge(self, source: str, into: str, flags: set[MergeFlags] | None = None) -> None:
+        """git's own merge verb, as distinct from a landing. Flags sorted so two runs agree textually."""
+        chosen = set(flags or ()) | {MergeFlags.no_edit}
+        rendered = ' '.join(sorted(flag.value for flag in chosen))
+        self.checkout(into)
+        self.command(self.authored(f'git merge -q {rendered} {source}'))
 
     def land(
         self,
@@ -417,11 +474,11 @@ class GitHistory:
         body: str | None = None,
         delete: bool = True,
     ) -> None:
-        """Land a branch on the trunk the way the matching GitHub button would.
+        """Land a branch on the trunk the way the named button, or `worktree land`, would.
 
-        An approximation, and worth knowing where it stops: GitHub performs the real
-        squash and rebase with its own committer identity and timestamps. The shape
-        reproduces; the metadata does not, and the shape is what the comparison is for.
+        An approximation, and worth knowing where it stops: GitHub performs the real squash and
+        rebase with its own committer identity and timestamps. The shape reproduces; the
+        metadata does not, and the shape is what the comparison is for.
         """
         self.pull_request_number += 1
         pull_request = self.pull_request_number
@@ -430,20 +487,46 @@ class GitHistory:
 
         match style:
             case LandStyle.merge:
-                self.command(f'git checkout {into}')
-                self.command(f'git merge --no-ff -m {quoted(title)} -m {quoted(body)} {branch}')
+                self.checkout(into)
+                self.command(self.authored(f'git merge -q --no-ff -m {quoted(title)} -m {quoted(body)} {branch}'))
             case LandStyle.squash:
-                self.command(f'git checkout {into}')
-                self.command(f'git merge --squash {branch}')
-                self.command(f'git commit -m {quoted(f"{title} (#{pull_request})")} -m {quoted(body)}')
+                self.checkout(into)
+                self.command(f'git merge -q --squash {branch}')
+                self.command(self.authored(f'git commit -q -m {quoted(f"{title} (#{pull_request})")} -m {quoted(body)}'))
             case LandStyle.rebase:
-                self.command(f'git checkout {branch}')
-                self.command(f'git rebase {into}')
-                self.command(f'git checkout {into}')
-                self.command(f'git merge --ff-only {branch}')
+                self.checkout(branch)
+                self.command(self.committed(f'git rebase -q {into}'))
+                self.checkout(into)
+                self.command(f'git merge -q --ff-only {branch}')
+            case LandStyle.fast_forward:
+                # `worktree land`: rebase onto the remote's tip, push HEAD straight at the
+                # trunk, then catch the primary checkout up. One commit stays one commit.
+                self.checkout(branch)
+                self.command(self.committed(f'git rebase -q {REMOTE_NAME}/{into}'))
+                self.command(f'git push -q {REMOTE_NAME} HEAD:{into}')
+                self.checkout(into)
+                self.command(f'git merge -q --ff-only {branch}')
 
         if delete:
             # -D after a squash because the branch's own commits never reach the trunk, so
             # git's merged-check refuses -d. That refusal is the shape: squash keeps the
             # changes and discards the commits that carried them.
-            self.command(f'git branch {"-D" if style is LandStyle.squash else "-d"} {branch}')
+            self.command(f'git branch {"-D" if style is LandStyle.squash else "-d"} -q {branch}')
+
+    def cherry_pick(self, ref: str, onto: str) -> None:
+        """Copy one commit onto another branch — same content, new parent, therefore new hash."""
+        self.checkout(onto)
+        self.command(self.committed(f'git cherry-pick {ref}'))
+
+    def revert(self, ref: str, on: str) -> None:
+        """Undo a commit by adding its inverse, which is the only undo that leaves history intact."""
+        self.checkout(on)
+        self.command(self.authored(f'git revert --no-edit {ref}'))
+
+    def tag(self, name: str) -> None:
+        self.command(f'git tag {name}')
+
+    def push(self, ref: str = DEFAULT_BRANCH, force: bool = False) -> None:
+        """Push, with the lease flags the fleet requires rather than a bare --force."""
+        lease = ' --force-with-lease --force-if-includes' if force else ''
+        self.command(f'git push -q{lease} {REMOTE_NAME} {ref}', tolerate_failure=force)

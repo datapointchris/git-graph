@@ -144,7 +144,7 @@ def test_a_build_keeps_its_narration_off_stdout(tmp_path):
     )
 
     assert result.returncode == 0
-    assert set(json.loads(result.stdout)) == {'rebase-catch-up', 'merge-catch-up'}
+    assert set(json.loads(result.stdout)['scenarios']) == {'rebase-catch-up', 'merge-catch-up'}
     assert 'git init' in result.stderr
 
 
@@ -159,10 +159,27 @@ def test_comparing_two_scenarios_measures_both(tmp_path):
         '--json',
     )
 
-    shapes = json.loads(result.stdout)
-    assert shapes['merge-catch-up']['merges'] > shapes['rebase-catch-up']['merges']
+    report = json.loads(result.stdout)
+    counts = {name: entry['counts'] for name, entry in report['scenarios'].items()}
+    assert counts['merge-catch-up']['merges'] > counts['rebase-catch-up']['merges']
     assert (tmp_path / 'out' / 'rebase-catch-up' / '.git').is_dir()
     assert (tmp_path / 'out' / 'merge-catch-up' / '.git').is_dir()
+
+
+def test_compare_reports_the_level_at_which_two_scenarios_diverge(tmp_path):
+    result = run('scenarios', 'compare', 'worktree-land', 'commit-to-main', '--target', str(tmp_path / 'out'), '--json')
+
+    report = json.loads(result.stdout)
+    assert report['verdict'] == 'identical'
+    assert report['rehomed'] == []
+
+
+def test_compare_names_the_commits_that_only_changed_identity(tmp_path):
+    result = run('scenarios', 'compare', 'worktree-behind', 'committed-in-order', '--target', str(tmp_path / 'out'), '--json')
+
+    report = json.loads(result.stdout)
+    assert report['verdict'] == 'objects'
+    assert {entry['subject'] for entry in report['rehomed']} == {'refresh the session token', 'someone else lands first'}
 
 
 def test_a_build_leaves_the_rerunnable_script_behind(tmp_path):

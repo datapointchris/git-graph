@@ -22,14 +22,15 @@ git remote add origin https://github.com/datapointchris/git-graph.git
 
 ## Running it
 
-A scenario is one named branching strategy: how an open branch catches up with the trunk, and
-which of GitHub's three buttons lands it.
+A scenario is a name and a timeline: a sequence of git operations — open a branch, commit, catch
+up, land, cherry-pick, force-push — each carrying its own options. Nothing about the algebra is
+specific to any one strategy, so a history where one branch rebases and another merges is as
+writable as the five that shipped first.
 
 ```bash
-git-graph scenarios list
-git-graph scenarios show rebase-catch-up          # the dry run — prints commands, runs none
-git-graph scenarios build rebase-catch-up --target target
-git -C target log --graph --oneline --all
+git-graph scenarios list                          # grouped by what each one teaches
+git-graph scenarios show worktree-land            # the timeline; --commands for every git line
+git-graph scenarios build conflict-rebase --target target
 ```
 
 `show` is the dry run and `build` is the write, so there is no `--dry-run` flag to get wrong.
@@ -37,21 +38,54 @@ git -C target log --graph --oneline --all
 
 ## The comparison
 
-Two scenarios differing in exactly one variable, built side by side into their own sandboxes:
+`compare` builds two scenarios into their own sandboxes and reports the **first level at which
+they differ**, going deeper only as long as it has to:
+
+| level | means |
+| --- | --- |
+| `counts` | different sizes |
+| `topology` | same numbers, different graph |
+| `trees` | same graph, different content |
+| `objects` | same content, different commit hashes — the work was replayed, not moved |
+| `identical` | the same repository, down to the hashes |
+
+The last two only mean anything because the generator is deterministic: fixed content, fixed
+messages, and a clock that advances one minute per commit rather than reading the wall. Two
+scenarios doing the same work produce byte-identical hashes, so a hash that *does* differ differs
+for a reason worth naming.
 
 ```bash
-git-graph scenarios compare rebase-catch-up merge-catch-up --target target
+git-graph scenarios compare worktree-land commit-to-main --target target
 ```
 
 ```text
-┃ scenario        ┃ commits ┃ merges ┃ trunk steps ┃ branches left ┃
-│ rebase-catch-up │      19 │      4 │          11 │             1 │
-│ merge-catch-up  │      23 │      8 │          11 │             1 │
+IDENTICAL
+Identical repositories, down to the commit hashes.
 ```
 
-Same timeline, same four interleaved features. Merging to catch up adds a merge commit per
-absorption on top of the one per landing — the thicket that argument is usually about, as a
-number and as a graph you can open.
+That is the whole answer to what a worktree does to a repository: nothing. A second checkout
+shares one object store, and `worktree land` fast-forwards, so one commit stays one commit and
+the history is indistinguishable from having typed it on the trunk. Move the trunk first
+(`compare worktree-behind committed-in-order`) and the verdict drops to `objects`, with a table
+naming every commit that kept its content and changed its hash.
+
+Counts alone would have called the first pair identical *and* called `rebase-catch-up` and
+`no-catch-up` identical, which they are not — they agree on every number and produce visibly
+different graphs. That is why the ladder exists.
+
+## Conflicts, and the cost that is not in the graph
+
+A commit writes a file of its own unless a scenario points two of them at the same path, which is
+the only way anything here can conflict. `build` then reports **stops** — the number of times git
+handed the run back for a human to repair.
+
+That number is nowhere in the finished repository. Rebasing through a contested file stops once
+per commit; merging the same file stops once, however long the branch. Two comparable shapes,
+very different costs to reach.
+
+`conflict-keep-trunk` shows the trap in git's own vocabulary: during a *rebase*, `--ours` is the
+branch you are replaying onto rather than your own work, so resolving that way empties the branch
+entirely.
 
 `--json` is on every read, and a build keeps its narration on stderr so `compare --json` parses.
 
@@ -60,4 +94,8 @@ number and as a graph you can open.
 The three landing styles model GitHub's buttons rather than git's local verbs, because the graph
 that matters is the one in the repo. GitHub performs the real squash and rebase with its own
 committer identity and timestamps; the shape reproduces here and the metadata does not, which is
-fine for a comparison about shape. There is no remote, so a rebase needs no force push.
+fine for a comparison about shape.
+
+There is a real remote — a bare repo inside the sandbox — because `worktree land` pushes, and
+because the reason a rebased branch needs a force push is that the replayed commits are new
+objects rather than the same ones moved.
