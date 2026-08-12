@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from git_graph.main import DEFAULT_BRANCH
+from git_graph.main import CatchUpStyle
 from git_graph.main import GitHistory
 from git_graph.main import MergeFlags
 
@@ -36,6 +37,45 @@ def build(target: Path, **kwargs) -> None:
         history.feature('experiment 01')
         history.final_commit()
         history.execute_commands()
+
+
+def build_with_catch_up(target: Path, style: CatchUpStyle) -> str:
+    """Open a branch, move the trunk under it, absorb the trunk. Returns the branch."""
+    with GitHistory(target_dir=target) as history:
+        history.commit(msg='FIRST COMMIT', branch=DEFAULT_BRANCH)
+        branch = history.start_branch('experiment 01')
+        history.advance(DEFAULT_BRANCH, commits=2)
+        history.catch_up(branch, style)
+        history.execute_commands()
+    return branch
+
+
+@pytest.mark.parametrize('style', [CatchUpStyle.rebase, CatchUpStyle.merge])
+def test_catching_up_absorbs_the_trunk(tmp_path, style):
+    sandbox = tmp_path / 'sandbox'
+
+    branch = build_with_catch_up(sandbox, style)
+
+    assert git(sandbox, 'rev-list', '--count', f'{branch}..{DEFAULT_BRANCH}') == '0'
+
+
+def test_rebasing_to_catch_up_leaves_the_branch_linear(tmp_path):
+    sandbox = tmp_path / 'sandbox'
+
+    branch = build_with_catch_up(sandbox, CatchUpStyle.rebase)
+
+    assert git(sandbox, 'rev-list', '--count', '--merges', branch) == '0'
+    assert git(sandbox, 'rev-list', '--count', f'{DEFAULT_BRANCH}..{branch}') == '2'
+
+
+def test_merging_to_catch_up_leaves_a_merge_commit_on_the_branch(tmp_path):
+    """The crossing per absorption that the fleet workflow rejects, in its smallest form."""
+    sandbox = tmp_path / 'sandbox'
+
+    branch = build_with_catch_up(sandbox, CatchUpStyle.merge)
+
+    assert git(sandbox, 'rev-list', '--count', '--merges', branch) == '1'
+    assert git(sandbox, 'rev-list', '--count', f'{DEFAULT_BRANCH}..{branch}') == '3'
 
 
 def test_generated_history_builds_a_real_repo(tmp_path):

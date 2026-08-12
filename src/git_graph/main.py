@@ -48,6 +48,11 @@ fi
 """
 
 
+def feature_branch_name(feature_name: str, long_lived: bool = False) -> str:
+    """Branch name for a feature, so the generator and its callers cannot disagree on it."""
+    return f'{"long-feature" if long_lived else "feature"}/{feature_name.replace(" ", "-")}'
+
+
 def in_sandbox() -> bool:
     return Path(SANDBOX_MARKER).exists()
 
@@ -76,6 +81,19 @@ class MergeFlags(enum.Enum):
     no_ff = '--no-ff'  # do not fast-forward merge
     no_commit = '--no-commit'  # perform the merge but do not commit
     squash = '--squash'  # gather changes from all commits and put in staging, requires a subsequent squash commit
+
+
+class CatchUpStyle(enum.StrEnum):
+    """How an open branch absorbs commits that landed on the trunk after it opened.
+
+    The variable under test. `rebase` replays the branch's own commits onto the new tip,
+    leaving it a clean linear sequence with nothing recording the catch-up; `merge` adds a
+    merge commit per absorption and one crossing per catch-up in the graph.
+    """
+
+    rebase = 'rebase'
+    merge = 'merge'
+    none = 'none'
 
 
 class InnerFeature(NamedTuple):
@@ -256,7 +274,7 @@ class GitHistory:
         squash_branch = '--squash' in parsed_flags
 
         feature_name = feature_name.replace(' ', '-')
-        this_branch = f'{"long-feature" if inner_features else "feature"}/{feature_name}'
+        this_branch = feature_branch_name(feature_name, long_lived=bool(inner_features))
 
         create_feature_branch = f'git checkout -b {this_branch} {base_branch}'
         checkout_this_branch = f'git checkout {this_branch}'
@@ -300,6 +318,41 @@ class GitHistory:
 
         if delete_on_merge:  # must -D force delete if squashed
             self.command(f'git branch {"-D" if squash_branch else "-d"} {this_branch}')
+
+    def start_branch(self, feature_name: str, base_branch: str = DEFAULT_BRANCH, commits: int = 2) -> str:
+        """Open a feature branch, leave it checked out, and return its name.
+
+        Split out of `feature()` so a branch can stay open while the trunk moves under it.
+        `feature()` opens and lands in one call, which is why no history it builds has ever
+        had anything to catch up to.
+        """
+        branch = feature_branch_name(feature_name)
+        self.command(f'git checkout -b {branch} {base_branch}')
+        self.advance(branch, commits=commits)
+        return branch
+
+    def advance(self, branch: str, commits: int = 1) -> None:
+        """Add commits to a branch — including the trunk, which is what makes catch-up mean anything."""
+        self.command(f'git checkout {branch}')
+        for _ in range(commits):
+            self.commit(msg='regular commit', branch=branch)
+
+    def catch_up(self, branch: str, style: CatchUpStyle, onto: str = DEFAULT_BRANCH) -> None:
+        """Absorb the trunk into an open branch.
+
+        Deliberately emits no annotating commit, unlike `feature()`. Whether a catch-up
+        leaves a commit behind is the difference being measured — a marker commit written
+        by the tool would show up in both shapes and destroy the comparison.
+        """
+        match style:
+            case CatchUpStyle.rebase:
+                self.command(f'git checkout {branch}')
+                self.command(f'git rebase {onto}')
+            case CatchUpStyle.merge:
+                self.command(f'git checkout {branch}')
+                self.command(f'git merge --no-edit {onto}')
+            case CatchUpStyle.none:
+                return
 
 
 if __name__ == '__main__':
