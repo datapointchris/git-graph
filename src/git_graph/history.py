@@ -17,13 +17,14 @@ import datetime as dt
 import enum
 import os
 import shlex
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from colorama import Fore
 from colorama import Style
+
+from git_graph import process
 
 DEFAULT_BRANCH = 'main'
 """The trunk every generated history branches from and lands on.
@@ -309,7 +310,7 @@ class GitHistory:
             # and a caller asking a build for --json has to be able to parse stdout. git's own
             # stdout is captured and relayed here rather than inherited, for the same reason.
             print(f'{Fore.BLUE}{command.text}{Style.RESET_ALL}', file=sys.stderr, flush=True)
-            completed = subprocess.run(command.text, shell=True, stdout=subprocess.PIPE, text=True)
+            completed = process.run(command.text, capture_stdout=True)
             if completed.stdout:
                 print(completed.stdout, end='', file=sys.stderr, flush=True)
             self.results.append(CommandResult(command=command, exit_code=completed.returncode))
@@ -391,7 +392,7 @@ class GitHistory:
         """
         if not in_sandbox():
             raise SystemExit(f'refusing to run {command!r} outside a git-graph sandbox')
-        subprocess.run(command, shell=True)
+        process.run(command)
 
     def write_file(self, path: str, content: str) -> None:
         self.command(f'printf {quoted(content + "\n")} > {path}')

@@ -20,10 +20,12 @@ be said about a worktree, and it is only sayable because the generator is determ
 
 import enum
 import hashlib
-import subprocess
 from dataclasses import asdict
 from dataclasses import dataclass
 from pathlib import Path
+
+from git_graph import process
+from git_graph.history import DEFAULT_BRANCH
 
 
 class Sameness(enum.StrEnum):
@@ -80,7 +82,7 @@ class Fingerprint:
 
 def git_output(sandbox: Path, *args: str) -> str:
     """Read from a built sandbox, raising rather than returning a wrong number on git's error."""
-    result = subprocess.run(['git', '-C', str(sandbox), *args], capture_output=True, text=True, check=True)
+    result = process.run(['git', '-C', str(sandbox), *args], capture_stdout=True, capture_stderr=True, check=True)
     return result.stdout.strip()
 
 
@@ -125,7 +127,7 @@ def canonical_order(parents: dict[str, list[str]], ref_tips: list[str]) -> list[
     return order
 
 
-def measure(sandbox: Path, trunk: str = 'main') -> Fingerprint:
+def measure(sandbox: Path, trunk: str = DEFAULT_BRANCH) -> Fingerprint:
     """Fingerprint a built repo at all four levels."""
     refs = tips(sandbox)
     parents = parent_map(sandbox)
