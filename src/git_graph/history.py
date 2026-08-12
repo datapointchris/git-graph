@@ -91,6 +91,24 @@ def in_sandbox() -> bool:
     return Path(SANDBOX_MARKER).exists()
 
 
+def project_root(start: Path | None = None) -> Path | None:
+    """The checkout this module lives in, found by its marker, or None when it is installed.
+
+    Counting parents from `__file__` is the form to avoid, and the reason is live here rather
+    than hypothetical. Installed rather than checked out, this module sits in
+    `…/lib/python3.13/site-packages/git_graph/`, where the third parent is the interpreter's
+    version directory — so a guard built on counting would refuse `…/lib/python3.13` and leave
+    the actual checkout unprotected. Measured, not inferred.
+
+    None is the honest answer for an installed build: there is no checkout to protect, and
+    saying so beats naming the wrong directory with the same confidence.
+    """
+    for directory in (start or Path(__file__).resolve()).parents:
+        if (directory / 'pyproject.toml').is_file():
+            return directory
+    return None
+
+
 def prepare_sandbox(target_dir: Path) -> Path:
     """Resolve the target directory, creating it, and refuse anywhere holding real work.
 
@@ -98,9 +116,10 @@ def prepare_sandbox(target_dir: Path) -> Path:
     scratch directory full of unrelated files is not a safe thing to run `rm -rf` inside.
     """
     target = target_dir.resolve()
-    # parents[2] under the src layout: history.py, git_graph/, src/, then the repo.
-    repo_root = Path(__file__).resolve().parents[2]
-    if target == Path.home() or target == repo_root or target in repo_root.parents:
+    if target == Path.home():
+        raise SystemExit(f'refusing to use {target} as a sandbox: it holds real work')
+    checkout = project_root()
+    if checkout is not None and (target == checkout or target in checkout.parents):
         raise SystemExit(f'refusing to use {target} as a sandbox: it holds real work')
     if target.exists() and any(target.iterdir()) and not (target / SANDBOX_MARKER).exists():
         raise SystemExit(f'{target} is not empty and carries no {SANDBOX_MARKER}')
