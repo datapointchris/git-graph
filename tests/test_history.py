@@ -9,12 +9,12 @@ import shlex
 
 import pytest
 
-from git_graph.main import DEFAULT_BRANCH
-from git_graph.main import SYNTHETIC_AUTHOR_EMAIL
-from git_graph.main import CatchUpStyle
-from git_graph.main import GitHistory
-from git_graph.main import LandStyle
-from git_graph.main import MergeFlags
+from git_graph.history import DEFAULT_BRANCH
+from git_graph.history import SYNTHETIC_AUTHOR_EMAIL
+from git_graph.history import CatchUpStyle
+from git_graph.history import GitHistory
+from git_graph.history import LandStyle
+from git_graph.history import MergeFlags
 
 
 def test_repo_is_initialised_on_the_default_branch():

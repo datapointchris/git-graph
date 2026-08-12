@@ -22,6 +22,6 @@ git remote add origin https://github.com/datapointchris/git-graph.git
 
 ## Running it
 
-Scenarios are configured in `src/git_graph/main.py` under `__main__`. `dry_run=True` prints the
+Scenarios are configured in `src/git_graph/history.py` under `__main__`. `dry_run=True` prints the
 commands without executing, and `interactive=True` steps through them pausing at each commit and
 merge.
