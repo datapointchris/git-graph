@@ -16,6 +16,11 @@ from git_graph.history import CatchUpStyle
 from git_graph.history import GitHistory
 from git_graph.history import LandStyle
 from git_graph.history import MergeFlags
+from git_graph.scenarios import DEFAULT_TIMELINE
+from git_graph.scenarios import SCENARIOS
+from git_graph.scenarios import CatchUp
+from git_graph.scenarios import Land
+from git_graph.scenarios import find
 
 
 def git(sandbox: Path, *args: str) -> str:
@@ -153,6 +158,79 @@ def test_the_working_directory_is_restored_after_a_run(tmp_path):
     build(tmp_path / 'sandbox')
 
     assert Path.cwd() == origin
+
+
+def build_scenario(target: Path, name: str) -> None:
+    with GitHistory(target_dir=target) as history:
+        find(name).generate(history)
+        history.execute_commands()
+
+
+def timeline_events(kind) -> int:
+    return len([event for event in DEFAULT_TIMELINE if isinstance(event, kind)])
+
+
+@pytest.mark.parametrize('scenario', SCENARIOS, ids=lambda scenario: scenario.name)
+def test_every_scenario_lands_everything_it_opens(tmp_path, scenario):
+    sandbox = tmp_path / scenario.name
+
+    build_scenario(sandbox, scenario.name)
+
+    assert git(sandbox, 'branch', '--list', 'feature/*') == ''
+    assert git(sandbox, 'rev-parse', '--abbrev-ref', 'HEAD') == DEFAULT_BRANCH
+
+
+def test_rebasing_to_catch_up_leaves_one_merge_per_landing(tmp_path):
+    sandbox = tmp_path / 'sandbox'
+
+    build_scenario(sandbox, 'rebase-catch-up')
+
+    merges = git(sandbox, 'rev-list', '--count', '--merges', DEFAULT_BRANCH)
+    assert int(merges) == timeline_events(Land)
+
+
+def test_merging_to_catch_up_adds_a_merge_per_absorption_on_top(tmp_path):
+    """The thicket: every catch-up leaves a crossing in the trunk's history as well."""
+    sandbox = tmp_path / 'sandbox'
+
+    build_scenario(sandbox, 'merge-catch-up')
+
+    merges = git(sandbox, 'rev-list', '--count', '--merges', DEFAULT_BRANCH)
+    assert int(merges) == timeline_events(Land) + timeline_events(CatchUp)
+
+
+def test_squashing_to_land_leaves_one_commit_per_feature_and_no_branch_commits(tmp_path):
+    sandbox = tmp_path / 'sandbox'
+
+    build_scenario(sandbox, 'squash-land')
+
+    subjects = git(sandbox, 'log', '--format=%s', DEFAULT_BRANCH)
+    assert git(sandbox, 'rev-list', '--count', '--merges', DEFAULT_BRANCH) == '0'
+    assert '[feature/' not in subjects
+    assert len([line for line in subjects.splitlines() if '(#' in line]) == timeline_events(Land)
+
+
+def test_rebasing_to_land_keeps_every_branch_commit_on_a_linear_trunk(tmp_path):
+    sandbox = tmp_path / 'sandbox'
+
+    build_scenario(sandbox, 'rebase-land')
+
+    subjects = git(sandbox, 'log', '--format=%s', DEFAULT_BRANCH)
+    assert git(sandbox, 'rev-list', '--count', '--merges', DEFAULT_BRANCH) == '0'
+    assert '[feature/' in subjects
+
+
+def test_two_scenarios_build_side_by_side_and_differ(tmp_path):
+    """The comparison the whole tool exists for: same timeline, one variable, two graphs."""
+    rebasing = tmp_path / 'rebasing'
+    merging = tmp_path / 'merging'
+
+    build_scenario(rebasing, 'rebase-catch-up')
+    build_scenario(merging, 'merge-catch-up')
+
+    assert int(git(merging, 'rev-list', '--count', '--merges', DEFAULT_BRANCH)) > int(
+        git(rebasing, 'rev-list', '--count', '--merges', DEFAULT_BRANCH)
+    )
 
 
 def test_two_runs_build_side_by_side_rather_than_nesting(tmp_path, monkeypatch):
