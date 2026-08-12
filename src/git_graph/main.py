@@ -19,6 +19,15 @@ feature targets cannot disagree — `git init` alone takes whatever `init.defaul
 the machine happens to carry, which is `master` on an unconfigured one.
 """
 
+SYNTHETIC_AUTHOR_NAME = 'git-graph'
+SYNTHETIC_AUTHOR_EMAIL = 'git-graph@localhost'
+"""Identity written into the sandbox so a generated script commits on any machine.
+
+git refuses to commit without a `user.email`, and a fresh CI runner has none — so a
+script that relies on the ambient identity builds a repo on a workstation and fails
+everywhere else. A synthetic repo has a synthetic author.
+"""
+
 SANDBOX_MARKER = '.git-graph-sandbox'
 """Proof that a directory belongs to this tool, checked before anything destructive.
 
@@ -97,13 +106,17 @@ class GitHistory:
         self.dry_run = dry_run
         self.merge_flags = merge_flags
         self.target_dir = target_dir
+        # Captured before any chdir so a relative target always resolves against where
+        # the caller stood. Building a second scenario after a first would otherwise
+        # resolve `target/` inside the first one's sandbox and nest them.
+        self.origin_dir = Path.cwd()
         self.fake = Faker(use_weighting=False)
         self.commands: list[str] = []
         if self.interactive and self.dry_run:
             raise ValueError('Cannot be interactive on a dry run')
 
     def __enter__(self):
-        self.target_dir = prepare_sandbox(self.target_dir)
+        self.target_dir = prepare_sandbox(self.origin_dir / self.target_dir)
         self.change_directory(self.target_dir)
         self.delete_commit_temp_files()
         self.delete_repo()
@@ -111,7 +124,8 @@ class GitHistory:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.delete_commit_temp_files(execute=True)
+        self.delete_commit_temp_files(execute=True)  # while still inside the sandbox the marker guards
+        self.change_directory(self.origin_dir)
         # Do not delete repo on exit or history is lost and cannot be visualized
 
     def change_directory(self, directory: Path):
@@ -177,6 +191,8 @@ class GitHistory:
 
     def init_git_repo(self):
         self.command(f'git init -b {DEFAULT_BRANCH}')
+        self.command(f'git config user.name "{SYNTHETIC_AUTHOR_NAME}"')
+        self.command(f'git config user.email "{SYNTHETIC_AUTHOR_EMAIL}"')
         self.command('touch __init__.py')
         self.command("""echo "__version__ = '0.1.0'" > __init__.py""")
         self.command('git add -A')
@@ -233,7 +249,10 @@ class GitHistory:
         # which makes one feature's flags leak into all the others.
         merge_flags = set(merge_flags or self.merge_flags or ())
         merge_flags.add(MergeFlags.no_edit)  # Always no-edit
-        parsed_flags = ' '.join([flag.value for flag in merge_flags])
+        # Sorted, because a set's iteration order varies between runs: unsorted, the same
+        # scenario emits `--no-edit --no-ff` one run and `--no-ff --no-edit` the next, and
+        # two generated scripts that differ textually cannot be diffed against each other.
+        parsed_flags = ' '.join(sorted(flag.value for flag in merge_flags))
         squash_branch = '--squash' in parsed_flags
 
         feature_name = feature_name.replace(' ', '-')
