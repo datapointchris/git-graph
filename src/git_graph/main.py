@@ -1,6 +1,7 @@
 import enum
 import os
 import random
+import shlex
 import subprocess
 import textwrap
 import time
@@ -48,6 +49,17 @@ fi
 """
 
 
+def quoted(text: str) -> str:
+    """Shell-quote text going into a generated command.
+
+    Every command is a plain line that the emitted script runs through a shell, so a
+    scenario named `don't` or a PR body with a backtick in it produces a script the shell
+    cannot parse at all — and it fails at run time, in the sandbox, long after the text was
+    chosen.
+    """
+    return shlex.quote(text)
+
+
 def feature_branch_name(feature_name: str, long_lived: bool = False) -> str:
     """Branch name for a feature, so the generator and its callers cannot disagree on it."""
     return f'{"long-feature" if long_lived else "feature"}/{feature_name.replace(" ", "-")}'
@@ -81,6 +93,25 @@ class MergeFlags(enum.Enum):
     no_ff = '--no-ff'  # do not fast-forward merge
     no_commit = '--no-commit'  # perform the merge but do not commit
     squash = '--squash'  # gather changes from all commits and put in staging, requires a subsequent squash commit
+
+
+class LandStyle(enum.StrEnum):
+    """How a pull request reaches the trunk — GitHub's three merge buttons.
+
+    Not their local namesakes, which is the point of modelling them separately: the graph
+    that matters is the one in the repo. `merge` leaves the branch as a visible bubble with
+    both parents; `squash` collapses it into one new commit and the branch is gone; `rebase`
+    replays its commits onto the trunk with new SHAs and committer dates, and the branch is
+    gone too.
+
+    `merge` is modelled with the fleet's own settings — `merge_commit_title=PR_TITLE` and
+    `merge_commit_message=PR_BODY`, per forge's sync-merge-settings.sh — rather than
+    GitHub's `Merge pull request #N from ...` default.
+    """
+
+    merge = 'merge'
+    squash = 'squash'
+    rebase = 'rebase'
 
 
 class CatchUpStyle(enum.StrEnum):
@@ -128,6 +159,7 @@ class GitHistory:
         # the caller stood. Building a second scenario after a first would otherwise
         # resolve `target/` inside the first one's sandbox and nest them.
         self.origin_dir = Path.cwd()
+        self.pull_request_number = 0
         self.fake = Faker(use_weighting=False)
         self.commands: list[str] = []
         if self.interactive and self.dry_run:
@@ -209,8 +241,8 @@ class GitHistory:
 
     def init_git_repo(self):
         self.command(f'git init -b {DEFAULT_BRANCH}')
-        self.command(f'git config user.name "{SYNTHETIC_AUTHOR_NAME}"')
-        self.command(f'git config user.email "{SYNTHETIC_AUTHOR_EMAIL}"')
+        self.command(f'git config user.name {quoted(SYNTHETIC_AUTHOR_NAME)}')
+        self.command(f'git config user.email {quoted(SYNTHETIC_AUTHOR_EMAIL)}')
         self.command('touch __init__.py')
         self.command("""echo "__version__ = '0.1.0'" > __init__.py""")
         self.command('git add -A')
@@ -242,14 +274,14 @@ class GitHistory:
         subprocess.run(command, shell=True)
 
     def commit(self, msg: str, branch: str):
-        self.command(f'echo "{self.fake.iso8601()}" >> {self.TEMP_FILE_PREFIX}{self.fake.swift11()}.py')
+        self.command(f'echo {quoted(self.fake.iso8601())} >> {self.TEMP_FILE_PREFIX}{self.fake.swift11()}.py')
         self.command('git add -A')
-        self.command(f'git commit -m "{self.commit_prefix()}: [{branch}] {msg}"')
+        self.command(f'git commit -m {quoted(f"{self.commit_prefix()}: [{branch}] {msg}")}')
 
     def final_commit(self):
         self.delete_commit_temp_files()
         self.command('git add -A')
-        self.command(f'git commit -m "chore: [{DEFAULT_BRANCH}] FINAL COMMIT: Deleted all temp files"')
+        self.command(f'git commit -m {quoted(f"chore: [{DEFAULT_BRANCH}] FINAL COMMIT: Deleted all temp files")}')
 
     def feature(
         self,
@@ -314,7 +346,7 @@ class GitHistory:
         self.command(merge_this_branch)
 
         if squash_branch:  # Squash commit required if branch is squashed
-            self.command(f'git commit -m "feat: {feature_name} SQUASHED"')
+            self.command(f'git commit -m {quoted(f"feat: {feature_name} SQUASHED")}')
 
         if delete_on_merge:  # must -D force delete if squashed
             self.command(f'git branch {"-D" if squash_branch else "-d"} {this_branch}')
@@ -353,6 +385,46 @@ class GitHistory:
                 self.command(f'git merge --no-edit {onto}')
             case CatchUpStyle.none:
                 return
+
+    def land(
+        self,
+        branch: str,
+        style: LandStyle,
+        into: str = DEFAULT_BRANCH,
+        title: str | None = None,
+        body: str | None = None,
+        delete: bool = True,
+    ) -> None:
+        """Land a branch on the trunk the way the matching GitHub button would.
+
+        An approximation, and worth knowing where it stops: GitHub performs the real
+        squash and rebase with its own committer identity and timestamps. The shape
+        reproduces; the metadata does not, and the shape is what the comparison is for.
+        """
+        self.pull_request_number += 1
+        pull_request = self.pull_request_number
+        title = title or f'feat: {branch.split("/", 1)[-1].replace("-", " ")}'
+        body = body or f'Landed with the {style} button as pull request #{pull_request}.'
+
+        match style:
+            case LandStyle.merge:
+                self.command(f'git checkout {into}')
+                self.command(f'git merge --no-ff -m {quoted(title)} -m {quoted(body)} {branch}')
+            case LandStyle.squash:
+                self.command(f'git checkout {into}')
+                self.command(f'git merge --squash {branch}')
+                self.command(f'git commit -m {quoted(f"{title} (#{pull_request})")} -m {quoted(body)}')
+            case LandStyle.rebase:
+                self.command(f'git checkout {branch}')
+                self.command(f'git rebase {into}')
+                self.command(f'git checkout {into}')
+                self.command(f'git merge --ff-only {branch}')
+
+        if delete:
+            # -D after a squash because the branch's own commits never reach the trunk, so
+            # git's merged-check refuses -d. That refusal is the shape: squash keeps the
+            # changes and discards the commits that carried them.
+            self.command(f'git branch {"-D" if style is LandStyle.squash else "-d"} {branch}')
 
 
 if __name__ == '__main__':

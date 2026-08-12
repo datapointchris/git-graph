@@ -14,6 +14,7 @@ import pytest
 from git_graph.main import DEFAULT_BRANCH
 from git_graph.main import CatchUpStyle
 from git_graph.main import GitHistory
+from git_graph.main import LandStyle
 from git_graph.main import MergeFlags
 
 
@@ -76,6 +77,55 @@ def test_merging_to_catch_up_leaves_a_merge_commit_on_the_branch(tmp_path):
 
     assert git(sandbox, 'rev-list', '--count', '--merges', branch) == '1'
     assert git(sandbox, 'rev-list', '--count', f'{DEFAULT_BRANCH}..{branch}') == '3'
+
+
+def build_with_landing(target: Path, style: LandStyle) -> None:
+    """One feature, with the trunk moving under it, landed by the matching GitHub button."""
+    with GitHistory(target_dir=target) as history:
+        history.commit(msg='FIRST COMMIT', branch=DEFAULT_BRANCH)
+        branch = history.start_branch('experiment 01')
+        history.advance(DEFAULT_BRANCH, commits=1)
+        history.land(branch, style)
+        history.execute_commands()
+
+
+@pytest.mark.parametrize('style', list(LandStyle))
+def test_landing_removes_the_branch_and_leaves_the_trunk_checked_out(tmp_path, style):
+    sandbox = tmp_path / 'sandbox'
+
+    build_with_landing(sandbox, style)
+
+    assert git(sandbox, 'rev-parse', '--abbrev-ref', 'HEAD') == DEFAULT_BRANCH
+    assert git(sandbox, 'branch', '--list', 'feature/*') == ''
+
+
+def test_the_merge_button_leaves_the_branch_as_a_visible_bubble(tmp_path):
+    sandbox = tmp_path / 'sandbox'
+
+    build_with_landing(sandbox, LandStyle.merge)
+
+    assert git(sandbox, 'rev-list', '--count', '--merges', DEFAULT_BRANCH) == '1'
+    assert '[feature/experiment-01]' in git(sandbox, 'log', '--format=%s', DEFAULT_BRANCH)
+
+
+def test_the_squash_button_keeps_the_changes_and_discards_the_commits(tmp_path):
+    sandbox = tmp_path / 'sandbox'
+
+    build_with_landing(sandbox, LandStyle.squash)
+
+    subjects = git(sandbox, 'log', '--format=%s', DEFAULT_BRANCH)
+    assert git(sandbox, 'rev-list', '--count', '--merges', DEFAULT_BRANCH) == '0'
+    assert '[feature/experiment-01]' not in subjects
+    assert '(#1)' in subjects
+
+
+def test_the_rebase_button_keeps_the_commits_and_discards_the_branch(tmp_path):
+    sandbox = tmp_path / 'sandbox'
+
+    build_with_landing(sandbox, LandStyle.rebase)
+
+    assert git(sandbox, 'rev-list', '--count', '--merges', DEFAULT_BRANCH) == '0'
+    assert '[feature/experiment-01]' in git(sandbox, 'log', '--format=%s', DEFAULT_BRANCH)
 
 
 def test_generated_history_builds_a_real_repo(tmp_path):
