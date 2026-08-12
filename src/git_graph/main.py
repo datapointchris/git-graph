@@ -11,6 +11,14 @@ from colorama import Fore
 from colorama import Style
 from faker import Faker
 
+DEFAULT_BRANCH = 'main'
+"""The trunk every generated history branches from and lands on.
+
+Named here rather than defaulted per call site so `git init -b` and the branch a
+feature targets cannot disagree — `git init` alone takes whatever `init.defaultBranch`
+the machine happens to carry, which is `master` on an unconfigured one.
+"""
+
 SANDBOX_MARKER = '.git-graph-sandbox'
 """Proof that a directory belongs to this tool, checked before anything destructive.
 
@@ -168,7 +176,7 @@ class GitHistory:
             print(f'{Fore.GREEN}Done, Exiting{Style.RESET_ALL}')
 
     def init_git_repo(self):
-        self.command('git init')
+        self.command(f'git init -b {DEFAULT_BRANCH}')
         self.command('touch __init__.py')
         self.command("""echo "__version__ = '0.1.0'" > __init__.py""")
         self.command('git add -A')
@@ -207,13 +215,13 @@ class GitHistory:
     def final_commit(self):
         self.delete_commit_temp_files()
         self.command('git add -A')
-        self.command('git commit -m "chore: [master] FINAL COMMIT: Deleted all temp files"')
+        self.command(f'git commit -m "chore: [{DEFAULT_BRANCH}] FINAL COMMIT: Deleted all temp files"')
 
     def feature(
         self,
         feature_name: str,
-        base_branch: str = 'master',
-        merge_branch: str = 'master',
+        base_branch: str = DEFAULT_BRANCH,
+        merge_branch: str = DEFAULT_BRANCH,
         merge_flags: set[MergeFlags] | None = None,
         delete_on_merge: bool = True,
         inner_features: list[InnerFeature] | None = None,
@@ -281,9 +289,9 @@ if __name__ == '__main__':
 
         inner_features = [
             InnerFeature(
-                feature_name='base=feature target=master',
+                feature_name=f'base=feature target={DEFAULT_BRANCH}',
                 base_branch='feature',
-                merge_branch='master',
+                merge_branch=DEFAULT_BRANCH,
                 merge_flags=gh.merge_flags,
                 delete_on_merge=delete_on_merge,
             ),
@@ -295,31 +303,31 @@ if __name__ == '__main__':
                 delete_on_merge=delete_on_merge,
             ),
             InnerFeature(
-                feature_name='base=master target=master',
-                base_branch='master',
-                merge_branch='master',
+                feature_name=f'base={DEFAULT_BRANCH} target={DEFAULT_BRANCH}',
+                base_branch=DEFAULT_BRANCH,
+                merge_branch=DEFAULT_BRANCH,
                 merge_flags=gh.merge_flags,
                 delete_on_merge=delete_on_merge,
             ),
             InnerFeature(
-                feature_name='base=master target=feature',
-                base_branch='master',
+                feature_name=f'base={DEFAULT_BRANCH} target=feature',
+                base_branch=DEFAULT_BRANCH,
                 merge_branch='feature',
                 merge_flags=gh.merge_flags,
                 delete_on_merge=delete_on_merge,
             ),
         ]
 
-        gh.commit(msg='FIRST COMMIT', branch='master')
+        gh.commit(msg='FIRST COMMIT', branch=DEFAULT_BRANCH)
         gh.feature('experiment 01')
         # gh.feature('MVP 02')
         # gh.feature('refactor 01', inner_features=inner_features)
-        # gh.commit(msg='commit after refactor 01', branch='master')
+        # gh.commit(msg='commit after refactor 01', branch=DEFAULT_BRANCH)
         # gh.feature('new feature 03')
         # gh.feature('refactor shit code 02', inner_features=inner_features)
         # gh.feature('shiny feature 04')
         # gh.feature('dumb dashboards 05', inner_features=[inner_features[0], inner_features[2]])
-        gh.commit(msg='commit before bugfix', branch='master')
+        gh.commit(msg='commit before bugfix', branch=DEFAULT_BRANCH)
         # gh.feature('bugfix cicd 06')
         # gh.feature('huge feature 03', inner_features=[inner_features[1], inner_features[3]])
         # gh.feature('little refactor 07')
