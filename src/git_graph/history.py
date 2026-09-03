@@ -142,7 +142,7 @@ class MergeFlags(enum.StrEnum):
 class LandStyle(enum.StrEnum):
     """How a branch reaches the trunk.
 
-    The first three are GitHub's merge buttons, modelled rather than their local namesakes
+    The first three are GitHub's merge buttons, modeled rather than their local namesakes
     because the graph that matters is the one in the repo. `merge` leaves the branch as a
     visible bubble with both parents; `squash` collapses it into one new commit and the
     branch's own commits never reach the trunk; `rebase` replays them with new hashes.
@@ -151,7 +151,7 @@ class LandStyle(enum.StrEnum):
     merge commit and no new commit of its own, so one commit stays one commit. That is the
     entire claim any single-commit branch workflow rests on, and the scenarios exist to check it.
 
-    `merge` is modelled with the repository settings `merge_commit_title=PR_TITLE` and
+    `merge` is modeled with the repository settings `merge_commit_title=PR_TITLE` and
     `merge_commit_message=PR_BODY`, which put the change and its reasoning in the merge commit
     rather than GitHub's `Merge pull request #N from ...` default.
     """
@@ -331,7 +331,7 @@ class GitHistory:
                 for command in self.commands:
                     run(command)
         except KeyboardInterrupt:
-            print(f'\n{Fore.RED}User CANCELLED{Style.RESET_ALL}', file=sys.stderr)
+            print(f'\n{Fore.RED}User CANCELED{Style.RESET_ALL}', file=sys.stderr)
             print(f'{Fore.YELLOW}Cleaning Repo...{Style.RESET_ALL}', file=sys.stderr)
             self.delete_repo(execute=True)
             print(f'{Fore.GREEN}Done, Exiting{Style.RESET_ALL}', file=sys.stderr)
@@ -446,7 +446,7 @@ class GitHistory:
 
         Written inverted — it *fails* when an operation is still in progress — so that one
         notion of "a stop" covers both. The count cannot be predicted from the timeline: a
-        rebase resolved in the branch's favour conflicts once and then applies cleanly, and the
+        rebase resolved in the branch's favor conflicts once and then applies cleanly, and the
         same rebase resolved the other way conflicts on every commit. That difference is a thing
         to measure, not to assume, so the probe is the measurement and the rounds below are
         merely an upper bound.

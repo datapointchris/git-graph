@@ -1,4 +1,4 @@
-"""The catalogue: one named scenario per git strategy or command worth seeing the shape of.
+"""The catalog: one named scenario per git strategy or command worth seeing the shape of.
 
 A scenario is a name and a timeline, nothing else. Where two scenarios exist to be compared
 they are built from one shared timeline with a single argument changed, so the difference in
@@ -348,7 +348,7 @@ def find(name: str) -> Scenario:
 
 
 def groups() -> dict[str, list[Scenario]]:
-    """Scenarios by what they teach, in catalogue order."""
+    """Scenarios by what they teach, in catalog order."""
     ordered: dict[str, list[Scenario]] = {}
     for scenario in SCENARIOS:
         ordered.setdefault(scenario.group, []).append(scenario)

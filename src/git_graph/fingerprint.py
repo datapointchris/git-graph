@@ -153,7 +153,7 @@ def measure(sandbox: Path, trunk: str = DEFAULT_BRANCH) -> Fingerprint:
     )
 
 
-def graph(sandbox: Path, colour: bool = True) -> str:
+def graph(sandbox: Path, color: bool = True) -> str:
     """git's own graph drawing — the thing you would actually look at in a terminal."""
     return git_output(
         sandbox,
@@ -162,7 +162,7 @@ def graph(sandbox: Path, colour: bool = True) -> str:
         'log',
         '--graph',
         '--all',
-        f'--color={"always" if colour else "never"}',
+        f'--color={"always" if color else "never"}',
         '--format=%C(auto)%h%d %s',
     )
 

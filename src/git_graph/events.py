@@ -4,7 +4,7 @@ Every option lives on the **event**, not on the scenario. An earlier design put 
 style and the landing button on the scenario, which made exactly five comparisons expressible
 and nothing else — a history where one branch rebases and another merges could not be written
 down at all. Here a scenario is only a name and a sequence, so the algebra bounds what can be
-modelled rather than the two axes someone happened to need first.
+modeled rather than the two axes someone happened to need first.
 
 `Open` taking a `base` is the whole of stacked pull requests and nested feature branches: a
 branch off a branch is not a special case, it is the general one with the default filled in.
@@ -212,7 +212,7 @@ class Walker:
 
     It tracks which files each side has written, which is enough to decide whether resolution
     steps are needed at all. It deliberately does not predict how many times git will stop:
-    resolving a rebase in the branch's favour conflicts once and then applies cleanly, and the
+    resolving a rebase in the branch's favor conflicts once and then applies cleanly, and the
     same rebase resolved the other way conflicts on every commit. The number of rounds emitted
     is an upper bound; the number reported is what git's exit codes actually said.
     """

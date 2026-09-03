@@ -91,7 +91,7 @@ def test_building_over_an_existing_sandbox_needs_force_when_not_a_terminal(tmp_p
 
 def test_refusing_a_rebuild_names_the_flag_that_would_allow_it(tmp_path):
     """Asserted at the source: the same message read back off stderr is rich's rendering of it,
-    which colours the flag into `-` plus `-force` on a runner and not on a workstation."""
+    which colors the flag into `-` plus `-force` on a runner and not on a workstation."""
     target = tmp_path / 'sandbox'
     target.mkdir()
     (target / 'already-here').touch()

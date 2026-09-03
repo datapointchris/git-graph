@@ -16,7 +16,7 @@ def texts(history: GitHistory) -> list[str]:
     return [command.text for command in history.commands]
 
 
-def test_repo_is_initialised_on_the_default_branch():
+def test_repo_is_initialized_on_the_default_branch():
     history = GitHistory()
     history.init_git_repo()
     assert f'git init -b {DEFAULT_BRANCH}' in texts(history)
@@ -29,7 +29,7 @@ def test_init_writes_an_identity_git_can_commit_with():
 
 
 def test_init_creates_a_remote_to_push_at():
-    """Without one, a fast-forward landing cannot be modelled and a force push has nowhere to go."""
+    """Without one, a fast-forward landing cannot be modeled and a force push has nowhere to go."""
     history = GitHistory()
     history.init_git_repo()
     assert [text for text in texts(history) if text.startswith('git init --bare')]

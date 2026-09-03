@@ -92,7 +92,7 @@ the thing being measured, and a marker the tool wrote would appear in both shape
 ## Conflict stops are measured, never predicted
 
 The walker decides *whether* resolution steps are needed — it knows which files both sides wrote.
-It does not decide how many: resolving a rebase in the branch's favour conflicts once and then
+It does not decide how many: resolving a rebase in the branch's favor conflicts once and then
 applies cleanly, while resolving it the other way conflicts on every commit. The rounds emitted
 are an upper bound, and `probe_stop()` — written inverted, so it *fails* while git is still
 waiting — is the measurement.
@@ -113,7 +113,7 @@ matters is the one in the repo.
 ## Where things live
 
 `history.py` is the engine and the only place that emits a command. `events.py` is the algebra and
-the walker. `scenarios.py` is the catalogue. `fingerprint.py` measures a built repo at four depths.
+the walker. `scenarios.py` is the catalog. `fingerprint.py` measures a built repo at four depths.
 `render.py` is the visual layer and deliberately wraps git's own `--graph` rather than laying out a
 DAG — the drawing you are shown is the one you will see in your own terminal. `main.py` is the
 typer app.

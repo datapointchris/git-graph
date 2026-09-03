@@ -53,11 +53,11 @@ def side_by_side(console: Console, panels: list[Panel], widths: list[int]) -> Re
 
 
 def widest(sandbox: Path) -> int:
-    return max((len(line) for line in graph(sandbox, colour=False).splitlines()), default=0)
+    return max((len(line) for line in graph(sandbox, color=False).splitlines()), default=0)
 
 
 def scenario_table(highlight: str = '') -> Table:
-    """The catalogue, grouped by what each scenario teaches."""
+    """The catalog, grouped by what each scenario teaches."""
     table = Table(show_header=True, header_style='bold', box=None, pad_edge=False)
     table.add_column('name', style='bold')
     table.add_column('teaches')
@@ -100,7 +100,7 @@ def counts_table(named: dict[str, Fingerprint]) -> Table:
 
 
 def verdict_panel(level: Sameness, first: str, second: str) -> Panel:
-    colours = {
+    colors = {
         Sameness.counts: 'red',
         Sameness.topology: 'yellow',
         Sameness.trees: 'yellow',
@@ -108,7 +108,7 @@ def verdict_panel(level: Sameness, first: str, second: str) -> Panel:
         Sameness.identical: 'green',
     }
     body = Text.from_markup(f'[bold]{level.value.upper()}[/bold]\n{VERDICTS[level]}')
-    return Panel(body, title=f'{first} vs {second}', title_align='left', border_style=colours[level])
+    return Panel(body, title=f'{first} vs {second}', title_align='left', border_style=colors[level])
 
 
 def difference_report(first: Path, second: Path, first_name: str, second_name: str, level: Sameness) -> RenderableType:
