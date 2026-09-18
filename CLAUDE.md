@@ -35,14 +35,11 @@ files is not safe to `rm -rf` inside either.
 ## Architecture: generate, then execute
 
 `GitHistory` accumulates shell commands into `self.commands` and executes nothing until
-`execute_commands()`. That split is the whole design and is worth preserving:
-
-- `dry_run=True` prints the commands without running them, so a strategy can be inspected as text.
-- `interactive=True` steps through, pausing at each commit and merge.
-- `write_commands_to_file()` emits the run as a re-runnable script.
-
-Anything new — a rebase verb, a catch-up step — should add commands to that list rather than
-shelling out directly, or it silently loses all three modes.
+`execute_commands()`. That split is the whole design, and it is what gives the CLI its three modes:
+`show` prints the commands without running them, `build --interactive` pauses at each commit and
+merge, and every build writes the run to a re-runnable `git-commands.sh`. Anything new — a rebase
+verb, a catch-up step — should add commands to that list rather than shelling out directly, or it
+silently loses all three modes.
 
 ## Determinism is load-bearing, not a nicety
 
@@ -112,16 +109,13 @@ matters is the one in the repo.
 
 ## Where things live
 
-`history.py` is the engine and the only place that emits a command. `events.py` is the algebra and
-the walker. `scenarios.py` is the catalog. `fingerprint.py` measures a built repo at four depths.
-`render.py` is the visual layer and deliberately wraps git's own `--graph` rather than laying out a
-DAG — the drawing you are shown is the one you will see in your own terminal. `main.py` is the
-typer app.
+`history.py` is the engine and the only place that emits a command, and `events.py` holds the event
+algebra and the walker. `render.py` deliberately wraps git's own `--graph` rather than laying out a
+DAG — the drawing you are shown is the one you will see in your own terminal.
 
-Two conventions shaped this surface and are worth keeping. A flag never decides whether a command
-writes, so `show` is the dry run, `build` is the write, and no `--dry-run` exists to contradict a
-verb. And stdout carries data only, so a build narrates to **stderr** with git's own stdout relayed
-there too, because `compare --json` has to parse.
+A flag never decides whether a command writes, which is why no `--dry-run` sits beside `show` and
+`build`. Stdout carries data only, so a build narrates to **stderr**, git's own stdout included,
+because `compare --json` has to parse.
 
-`process.py` is the boundary: every subprocess in the package goes through it, including the reads
-`fingerprint.py` makes of a built repo. There are no sanctioned exceptions, and a test asserts it.
+`process.py` is the boundary: every subprocess in the package goes through it, including
+`fingerprint.py`'s reads of a built repo. There are no sanctioned exceptions, and a test asserts it.
