@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from pyselfupdate import Config
+from pyselfupdate import notify
+from pyselfupdate.typercmd import run_update
 from rich.console import Console
 from rich.text import Text
 
@@ -40,6 +43,9 @@ ROOT_HELP = (
 )
 
 DEFAULT_TARGET = Path('target')
+
+# One config for `update` and the notice, so the notice never names a release `update` would not install.
+UPDATE_CONFIG = Config(tool='git-graph', owner='datapointchris')
 
 app = typer.Typer(name='git-graph', no_args_is_help=True, help=ROOT_HELP)
 scenarios_app = typer.Typer(
@@ -137,6 +143,7 @@ def build_into(scenario: Scenario, target: Path, interactive: bool = False) -> t
 
 @app.callback()
 def root(
+    ctx: typer.Context,
     version: Annotated[
         bool | None,
         typer.Option('--version', callback=show_version, is_eager=True, help='Show the installed version and exit.'),
@@ -147,6 +154,17 @@ def root(
     ] = False,
 ) -> None:
     Interactivity.no_input = no_input
+    # `update` is already installing the release the notice would name.
+    if ctx.invoked_subcommand != 'update':
+        notify(UPDATE_CONFIG)
+
+
+@app.command(rich_help_panel='Manage')
+def update(
+    check_only: Annotated[bool, typer.Option('--check', help='Report whether an update is available without installing it.')] = False,
+) -> None:
+    """Update git-graph to the latest GitHub release."""
+    run_update(UPDATE_CONFIG, check_only=check_only)
 
 
 @scenarios_app.command('list', rich_help_panel='Reading')
