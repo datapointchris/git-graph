@@ -1,6 +1,6 @@
 [project]
 name = "git-graph"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Build synthetic git histories from named scenarios, to see what merge, rebase, squash and worktrees actually produce"
 readme = "README.md"
 license = "MIT"
@@ -24,9 +24,22 @@ dev = [
     "ruff==0.12.5",
 ]
 
+# The release tag is the version. python-semantic-release finds no file to
+# stamp, so it tags the merge commit itself and writes no release commit.
+# uv_build cannot do this: its metadata has no dynamic version field.
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+style = "semver"
+
+# A new commit or tag changes the version, so it has to invalidate uv's cache.
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
+
 [build-system]
-requires = ["uv_build>=0.12.2,<0.13.0"]
-build-backend = "uv_build"
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
 
 [tool.semantic_release]
 # A feature release on 0.x stays on 0.x. python-semantic-release v10 defaults
@@ -35,16 +48,6 @@ allow_zero_version = true
 # 1.0 is a compatibility promise, so a breaking change on 0.x is a minor bump.
 # Removing this key is how the project reaches 1.0.
 major_on_zero = false
-version_toml = ["pyproject.toml:project.version"]
-commit_message = "build(release): {version}"
-# The package name is hardcoded because python-semantic-release does not set
-# $PACKAGE_NAME, and the variable form silently ships a stale uv.lock.
-# Reads the uv-lock hook's rev, the one uv release every uv.lock writer runs.
-build_command = '''
-    pip install "uv==$(python -c 'import re; print(re.search(r"uv-pre-commit\s+rev: \"?([\w.]+)", open(".pre-commit-config.yaml").read())[1])')"
-    uv lock --upgrade-package git-graph
-    git add uv.lock
-'''
 
 
 # ---------- Configurations ---------- #
