@@ -7,6 +7,7 @@ from git_graph.events import Commit
 from git_graph.events import Land
 from git_graph.events import Open
 from git_graph.events import generate
+from git_graph.history import CatchUpStyle
 from git_graph.history import GitHistory
 
 
@@ -65,7 +66,6 @@ def test_a_contested_file_makes_the_catch_up_resolve():
 
 def test_every_event_carries_its_own_options():
     """The reason the algebra is open-ended: two branches in one history can differ."""
-    from git_graph.history import CatchUpStyle
 
     commands = texts(
         (
