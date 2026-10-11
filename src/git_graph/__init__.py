@@ -2,7 +2,7 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as installed_version
 
 
-def _tool_version() -> str:
+def tool_version() -> str:
     """This build's version, or 'unknown' from a source checkout.
 
     Read from the installed distribution, whose version the release tag sets
@@ -20,4 +20,4 @@ def _tool_version() -> str:
         return 'unknown'
 
 
-__version__ = _tool_version()
+__version__ = tool_version()
