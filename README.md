@@ -184,7 +184,7 @@ measured from git's exit codes, never predicted.
 
 `Land` models GitHub's three merge buttons, plus a fast-forward push, rather than git's local
 verbs. The graph that matters is the one in the repository after the pull request closes.
-`local-merge-verbs` shows git's own plain and `--no-ff` merges for contrast.
+`local-merge-verbs` shows git's own merge, as a fast-forward and with `--no-ff`, for contrast.
 
 The merge button is modeled with the merge commit titled by the pull request and carrying its body,
 in place of GitHub's default `Merge pull request #N from …` title.

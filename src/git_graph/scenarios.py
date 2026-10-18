@@ -84,9 +84,10 @@ def interleaved(catch_up: CatchUpStyle, land: LandStyle) -> Timeline:
 def contested(catch_up: CatchUpStyle, resolve: Resolution) -> Timeline:
     """One file, written by both sides. The only way anything here can conflict.
 
-    Two branch commits rewrite it, so a rebase replaying them stops once per commit while a
-    merge absorbing them stops once — the trade choosing between them is actually made against,
-    and a cost the finished graph does not record anywhere.
+    Two branch commits rewrite it. A merge absorbing them stops once. A rebase replaying them
+    stops once when resolved in the branch's favor, because the second commit applies on top of
+    the first resolution. Resolved toward the trunk, it stops at both. Neither count appears
+    anywhere in the finished graph.
     """
     return (
         Open('rate limiter'),
@@ -237,7 +238,7 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         name='conflict-rebase',
         group='Conflicts',
-        teaches='Rebasing through a contested file stops once per commit.',
+        teaches="Rebasing through a contested file, keeping the branch's side. It stops once, at the first commit.",
         timeline=contested(CatchUpStyle.rebase, Resolution.theirs),
         compare_with='conflict-merge',
     ),
@@ -251,7 +252,7 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         name='conflict-keep-trunk',
         group='Conflicts',
-        teaches='The same rebase resolved with --ours, which during a rebase means the trunk: the branch is emptied.',
+        teaches='The same rebase with --ours, which during a rebase means the trunk. It stops at every commit and empties the branch.',
         timeline=contested(CatchUpStyle.rebase, Resolution.ours),
         compare_with='conflict-rebase',
     ),
@@ -307,7 +308,7 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         name='local-merge-verbs',
         group='Landing',
-        teaches="git's own merge, no-ff and squash, as distinct from the buttons a pull request offers.",
+        teaches="git's own merge, as a fast-forward and with --no-ff, as distinct from the buttons a pull request offers.",
         timeline=(
             Open('fast forwardable'),
             Commit(on='fast forwardable', message='ff'),
