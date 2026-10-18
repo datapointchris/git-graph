@@ -87,7 +87,8 @@ git -C target log --graph --oneline --all              # the graph it drew, in y
 
 A build generates its whole run as text before it executes a line. `show` prints that text.
 `build` writes it into the sandbox as `git-commands.sh`, then runs it. Run again inside the
-sandbox, the script rebuilds the same repository, down to the hashes.
+sandbox, the script rebuilds the same repository, down to the hashes. `build --interactive` pauses
+after each commit and merge until you type `finish`.
 
 Every build starts with `rm -rf .git` in its target. So a target must carry a `.git-graph-sandbox`
 marker before anything runs. `build` creates the directory and the marker. It refuses `$HOME`. It

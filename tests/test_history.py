@@ -10,6 +10,7 @@ from git_graph.history import CatchUpStyle
 from git_graph.history import GitHistory
 from git_graph.history import LandStyle
 from git_graph.history import branch_name
+from git_graph.history import git_verb
 
 
 def texts(history: GitHistory) -> list[str]:
@@ -103,7 +104,16 @@ def test_catch_up_never_writes_a_commit_of_its_own():
     """A marker commit would show up in every shape and destroy the comparison."""
     history = GitHistory()
     history.catch_up('feature/x', CatchUpStyle.rebase)
-    assert not [text for text in texts(history) if text.startswith('git commit')]
+    assert 'commit' not in [git_verb(text) for text in texts(history)]
+
+
+def test_an_interactive_build_pauses_at_a_commit_whose_dates_are_pinned():
+    """Every commit line starts with `GIT_AUTHOR_DATE=`, so matching its first word pauses nowhere."""
+    history = GitHistory()
+    history.init_git_repo()
+    paused = [command.text for command in history.commands if command.pauses]
+    assert len(paused) == 1
+    assert 'git commit' in paused[0]
 
 
 def test_a_conflict_probe_counts_and_a_tolerated_command_does_not():

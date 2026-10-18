@@ -16,6 +16,7 @@ the replayed commit gets a new hash because its parent changed, and for no other
 import datetime as dt
 import enum
 import os
+import re
 import shlex
 import sys
 from dataclasses import dataclass
@@ -82,6 +83,27 @@ def quoted(text: str) -> str:
     all — failing at run time, in the sandbox, long after the text was chosen.
     """
     return shlex.quote(text)
+
+
+ENVIRONMENT_ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=\S*')
+
+PAUSE_VERBS = frozenset({'commit', 'merge', 'rebase', 'cherry-pick', 'revert'})
+"""The git verbs that can write a commit. An interactive build stops after each one."""
+
+
+def git_verb(text: str) -> str | None:
+    """The git subcommand a command line runs, or None for a line that does not start with git.
+
+    Read past the leading `NAME=value` assignments rather than matched as a prefix. Every line
+    that creates a commit starts with the dates it pins, as in `GIT_AUTHOR_DATE=... git commit`,
+    so a prefix match finds none of them.
+    """
+    words = text.split()
+    while words and ENVIRONMENT_ASSIGNMENT.fullmatch(words[0]):
+        words.pop(0)
+    if len(words) < 2 or words[0] != 'git':
+        return None
+    return words[1]
 
 
 def branch_name(feature: str) -> str:
@@ -205,6 +227,11 @@ class Command:
     tolerate_failure: bool = False
     conflict_point: bool = False
 
+    @property
+    def pauses(self) -> bool:
+        """Whether an interactive build stops after this line: after each commit and merge."""
+        return git_verb(self.text) in PAUSE_VERBS
+
 
 @dataclass(frozen=True)
 class CommandResult:
@@ -325,7 +352,7 @@ class GitHistory:
                 stepping = True
                 for command in self.commands:
                     run(command)
-                    if stepping and command.text.startswith(('git commit', 'git merge', 'git rebase')):
+                    if stepping and command.pauses:
                         stepping = input(user_prompt).strip() != 'finish'
             else:
                 for command in self.commands:
