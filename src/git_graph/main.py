@@ -19,7 +19,9 @@ from git_graph.fingerprint import VERDICTS
 from git_graph.fingerprint import Fingerprint
 from git_graph.fingerprint import measure
 from git_graph.fingerprint import rehomed
+from git_graph.history import SANDBOX_MARKER
 from git_graph.history import GitHistory
+from git_graph.history import refuse_unsafe_target
 from git_graph.scenarios import SCENARIOS
 from git_graph.scenarios import Scenario
 from git_graph.scenarios import find
@@ -117,12 +119,14 @@ def scenario_record(scenario: Scenario) -> dict:
 
 
 def confirm_destroying(target: Path, force: bool) -> None:
-    """Gate a rebuild of a directory that already holds one.
+    """Refuse a target that is not a sandbox, and gate a rebuild of one that already holds a build.
 
-    A fresh or empty target needs no confirmation — there is nothing to lose, and the sandbox
-    marker already refuses anywhere holding real work.
+    A target with no marker holds no build. Absent or empty, it has nothing to lose and needs no
+    confirmation. Holding anything else, it is refused before any question, because no answer
+    would make it safe to delete inside.
     """
-    if force or not target.exists() or not any(target.iterdir()):
+    refuse_unsafe_target(target)
+    if force or not (target / SANDBOX_MARKER).exists():
         return
     if not prompting_allowed():
         raise typer.BadParameter(f'{target} already holds a build; pass --force to rebuild it')

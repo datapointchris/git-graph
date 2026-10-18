@@ -133,8 +133,8 @@ def project_root(start: Path | None = None) -> Path | None:
     return None
 
 
-def prepare_sandbox(target_dir: Path) -> Path:
-    """Resolve the target directory, creating it, and refuse anywhere holding real work.
+def refuse_unsafe_target(target_dir: Path) -> Path:
+    """Resolve the target directory, refusing anywhere holding real work.
 
     Refuses a non-empty directory without the marker rather than only checking for `.git`: a
     scratch directory full of unrelated files is not a safe thing to run `rm -rf` inside.
@@ -146,7 +146,13 @@ def prepare_sandbox(target_dir: Path) -> Path:
     if checkout is not None and (target == checkout or target in checkout.parents):
         raise SystemExit(f'refusing to use {target} as a sandbox: it holds real work')
     if target.exists() and any(target.iterdir()) and not (target / SANDBOX_MARKER).exists():
-        raise SystemExit(f'{target} is not empty and carries no {SANDBOX_MARKER}')
+        raise SystemExit(f'refusing to use {target} as a sandbox: it is not empty and carries no {SANDBOX_MARKER}')
+    return target
+
+
+def prepare_sandbox(target_dir: Path) -> Path:
+    """Resolve the target directory, refuse it if it holds real work, then create and mark it."""
+    target = refuse_unsafe_target(target_dir)
     target.mkdir(parents=True, exist_ok=True)
     (target / SANDBOX_MARKER).touch()
     return target

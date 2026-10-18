@@ -41,9 +41,9 @@ git-graph scenarios compare worktree-land commit-to-main --target pair   # prove
 `show` is the dry run. `build` is the write. No flag decides whether a command writes, so there is
 no `--dry-run` to forget.
 
-A target that is not empty is rebuilt only after a yes. `--force` is that yes. Without a terminal,
-or under `--no-input`, `build` fails naming `--force` rather than asking. A non-empty directory
-with no `.git-graph-sandbox` marker is refused whatever the answer.
+A target that already holds a build is rebuilt only after a yes. `--force` is that yes. Without a
+terminal, or under `--no-input`, `build` fails naming `--force` rather than asking. A non-empty
+directory with no `.git-graph-sandbox` marker is refused before any question.
 
 `compare` gives each scenario a directory of its own name under its target. Here those are
 `pair/worktree-land` and `pair/commit-to-main`.
@@ -79,7 +79,7 @@ The scenarios are defined in `src/git_graph/scenarios.py`.
 ## `build` — every command generated first, then run in a sandbox and nowhere else
 
 ```bash
-git-graph scenarios build rebase-land                  # into ./target, asking first if it is not empty
+git-graph scenarios build rebase-land                  # into ./target, asking first if it holds a build
 git-graph scenarios build rebase-land --force --json   # rebuild without asking; counts, fingerprints, stops, path
 git -C target log --graph --oneline --all              # the graph it drew, in your own terminal
 (cd target && ./git-commands.sh)                       # the same run again, from the script the build wrote

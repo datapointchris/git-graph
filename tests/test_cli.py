@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 import typer
 
+from git_graph.history import SANDBOX_MARKER
 from git_graph.main import confirm_destroying
 from git_graph.main import resolve
 from git_graph.scenarios import SCENARIOS
@@ -94,7 +95,7 @@ def test_refusing_a_rebuild_names_the_flag_that_would_allow_it(tmp_path):
     which colors the flag into `-` plus `-force` on a runner and not on a workstation."""
     target = tmp_path / 'sandbox'
     target.mkdir()
-    (target / 'already-here').touch()
+    (target / SANDBOX_MARKER).touch()
 
     with pytest.raises(typer.BadParameter, match='--force'):
         confirm_destroying(target, force=False)
