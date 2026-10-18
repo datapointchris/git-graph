@@ -1,6 +1,7 @@
 """The guards, which are the only part of this tool where being wrong destroys something.
 
-Every path here ends in `rm -rf .git`, and this repo has lost its own once.
+Every path here ends in `rm -rf .git`. A guard that answers wrong deletes a real repository's
+history, this checkout's included.
 """
 
 from pathlib import Path
