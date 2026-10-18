@@ -12,15 +12,17 @@ own terminal.
 
 ## Install
 
-git-graph installs as a uv tool, from a tagged release. It needs Python 3.13 or later, with git on
-`PATH`.
+git-graph installs as a uv tool, from the package index every release is published to. It needs
+Python 3.13 or later, with git on `PATH`.
 
 ```bash
-tag=$(git ls-remote --tags --refs --sort=-v:refname https://github.com/datapointchris/git-graph 'v*' | head -1 | cut -d/ -f3)
-uv tool install "git+https://github.com/datapointchris/git-graph@$tag"   # the newest release
+uv tool install --index https://pypi.ichrisbirch.com/simple/ git-graph   # the newest release
 git-graph --version                                                       # the version, and the commit it was built from
 git-graph update --check                                                  # whether a newer release exists
 ```
+
+Name the index on the install: without it uv asks PyPI, where `git-graph` is a different project.
+uv records the index beside the tool, which is where `git-graph update` reads it back.
 
 `git-graph update` reinstalls the newest release over the current one. It refuses an install from a
 local checkout or from a branch, because neither carries a release version to compare. Every other
