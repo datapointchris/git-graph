@@ -458,12 +458,17 @@ class GitHistory:
 
         `rounds` is an upper bound rather than a prediction — a round that finds no rebase in
         progress does nothing and exits clean, so over-estimating costs a no-op and never a
-        wrong number. `--skip` handles the case that makes resolving toward the trunk so
-        destructive: a commit whose changes were all discarded has nothing left to apply, and
-        git will not continue with an empty commit.
+        wrong number.
+
+        `--continue` fails in two cases, and only one of them is a case for `--skip`. It can
+        stop at the next commit's conflict, which leaves unmerged paths for the next round's
+        probe to count. Or it can refuse a commit whose changes were all discarded, which is
+        what resolving toward the trunk produces, and which leaves no unmerged path. Skipping on
+        every failure would discard the next conflict unresolved and uncounted.
         """
         resolve = f'git checkout --{resolution} -- . 2>/dev/null; git add -A'
-        continue_or_skip = f'{self.committed("git -c core.editor=true rebase --continue")} || git rebase --skip'
+        stopped_again = '[ -n "$(git diff --name-only --diff-filter=U)" ]'
+        continue_or_skip = f'{self.committed("git -c core.editor=true rebase --continue")} || {stopped_again} || git rebase --skip'
         for _ in range(rounds):
             self.probe_stop(self.REBASE_IN_PROGRESS)
             self.command(f'if {self.REBASE_IN_PROGRESS}; then {resolve}; {continue_or_skip}; fi', tolerate_failure=True)

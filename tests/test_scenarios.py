@@ -58,18 +58,12 @@ def test_rebasing_to_land_keeps_every_commit_on_a_linear_trunk(tmp_path, build):
     assert 'session token refresh 1' in git(sandbox, 'log', '--format=%s', 'main')
 
 
-def test_a_rebase_stops_and_a_merge_stops_once(tmp_path, build):
-    """The cost the finished graph records nowhere, which is why the run is measured too."""
-    _, _, rebasing = build('conflict-rebase', tmp_path / 'rebase')
-    _, _, merging = build('conflict-merge', tmp_path / 'merge')
-    assert rebasing.stops >= 1
-    assert merging.stops == 1
-
-
-def test_resolving_a_rebase_toward_the_trunk_discards_the_branch(tmp_path, build):
+def test_a_rebase_stops_at_every_commit_only_when_resolved_toward_the_trunk(tmp_path, build):
     """`--ours` during a rebase means the branch you are replaying onto, not your own work."""
-    kept, _, _ = build('conflict-rebase', tmp_path / 'kept')
-    lost, _, _ = build('conflict-keep-trunk', tmp_path / 'lost')
+    kept, _, rebasing = build('conflict-rebase', tmp_path / 'kept')
+    _, _, merging = build('conflict-merge', tmp_path / 'merge')
+    lost, _, emptying = build('conflict-keep-trunk', tmp_path / 'lost')
+    assert (rebasing.stops, merging.stops, emptying.stops) == (1, 1, 2)
     assert 'limit = 200' in git(kept, 'show', 'main:config.txt')
     assert 'limit = 50' in git(lost, 'show', 'main:config.txt')
 
