@@ -61,7 +61,14 @@ app = typer.Typer(name='git-graph', no_args_is_help=True, help=ROOT_HELP)
 scenarios_app = typer.Typer(
     name='scenarios',
     no_args_is_help=True,
-    help='Named scenarios, the histories they build, and what separates two of them.',
+    help=(
+        'Named scenarios, the histories they build, and what separates two of them.'
+        '\n\n'
+        'Examples:\n'
+        '  git-graph scenarios list                                  pick a scenario\n'
+        '  git-graph scenarios build worktree-land                   draw its graph\n'
+        '  git-graph scenarios compare worktree-land commit-to-main  where two differ'
+    ),
 )
 app.add_typer(scenarios_app, name='scenarios')
 
@@ -175,7 +182,12 @@ def root(
 def update(
     check_only: Annotated[bool, typer.Option('--check', help='Report whether an update is available without installing it.')] = False,
 ) -> None:
-    """Update git-graph to the latest GitHub release."""
+    """Update git-graph to the latest GitHub release.
+
+    Examples:
+      git-graph update            install the newest release
+      git-graph update --check    only say whether one is available
+    """
     run_update(UPDATE_CONFIG, check_only=check_only)
 
 
@@ -183,7 +195,12 @@ def update(
 def list_scenarios(
     as_json: Annotated[bool, typer.Option('--json', help='Output as JSON to stdout.')] = False,
 ) -> None:
-    """List every scenario, grouped by what looking at it teaches."""
+    """List every scenario, grouped by what looking at it teaches.
+
+    Examples:
+      git-graph scenarios list           pick a scenario to read or build
+      git-graph scenarios list --json    every scenario with its timeline
+    """
     if as_json:
         print_json([scenario_record(scenario) for scenario in SCENARIOS])
         return
@@ -196,7 +213,12 @@ def show(
     commands: Annotated[bool, typer.Option('--commands', help='Also print every command a build would run.')] = False,
     as_json: Annotated[bool, typer.Option('--json', help='Output as JSON to stdout.')] = False,
 ) -> None:
-    """Show a scenario's timeline, and optionally every command it would run. Runs nothing."""
+    """Show a scenario's timeline, and optionally every command it would run. Runs nothing.
+
+    Examples:
+      git-graph scenarios show worktree-land               its timeline
+      git-graph scenarios show worktree-land --commands    every command a build runs
+    """
     scenario = resolve(name)
     if as_json:
         print_json(scenario_record(scenario) | {'commands': scenario.commands()})
@@ -220,7 +242,13 @@ def build(
     force: Annotated[bool, typer.Option('--force', help='Rebuild a directory that already holds a build, without asking.')] = False,
     as_json: Annotated[bool, typer.Option('--json', help='Output as JSON to stdout.')] = False,
 ) -> None:
-    """Build a scenario into a sandbox and show the graph it produced."""
+    """Build a scenario into a sandbox and show the graph it produced.
+
+    Examples:
+      git-graph scenarios build worktree-land                  draw its graph in ./target
+      git-graph scenarios build worktree-land --interactive    pause at each commit and merge
+      git-graph scenarios build worktree-land --force          rebuild without asking
+    """
     scenario = resolve(name)
     if interactive and not prompting_allowed():
         raise typer.BadParameter('--interactive needs a terminal; drop it to run the whole scenario through')
@@ -247,7 +275,12 @@ def compare(
     force: Annotated[bool, typer.Option('--force', help='Rebuild directories that already hold a build, without asking.')] = False,
     as_json: Annotated[bool, typer.Option('--json', help='Output as JSON to stdout.')] = False,
 ) -> None:
-    """Build two scenarios side by side and report the first level at which they differ."""
+    """Build two scenarios side by side and report the first level at which they differ.
+
+    Examples:
+      git-graph scenarios compare worktree-land commit-to-main           where two differ
+      git-graph scenarios compare worktree-land commit-to-main --json    the verdict as data
+    """
     if first == second:
         raise typer.BadParameter('compare two different scenarios; building one twice answers nothing')
     scenarios = [resolve(first), resolve(second)]
