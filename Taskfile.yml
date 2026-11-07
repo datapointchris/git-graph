@@ -1,0 +1,41 @@
+version: '3'
+
+tasks:
+  default:
+    desc: List the tasks
+    silent: true
+    cmds:
+      - task --list
+
+  setup:
+    desc: Install the dependencies and the git hooks
+    cmds:
+      - uv sync
+      - uv run pre-commit install --hook-type pre-commit --hook-type commit-msg
+
+  test:
+    desc: Run the test suite
+    cmds:
+      - uv run pytest
+
+  lint:
+    desc: Run the read-only checks, the format check and the type check included
+    cmds:
+      - uv run ruff check .
+      - uv run ruff format --check .
+      - task: typecheck
+      - uv run pre-commit run codespell --all-files
+
+  format:
+    desc: Rewrite files with ruff's formatter and fixes, markdownlint's fixes and the whitespace fixers
+    cmds:
+      - uv run ruff format .
+      - uv run ruff check --fix .
+      - uv run pre-commit run markdownlint --all-files
+      - uv run pre-commit run end-of-file-fixer --all-files
+      - uv run pre-commit run trailing-whitespace --all-files
+
+  typecheck:
+    desc: Type-check the package and its tests with mypy
+    cmds:
+      - uv run mypy .

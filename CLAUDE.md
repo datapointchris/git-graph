@@ -115,3 +115,8 @@ because `compare --json` has to parse.
 
 `process.py` is the boundary: every subprocess in the package goes through it, including
 `fingerprint.py`'s reads of a built repo. There are no sanctioned exceptions, and a test asserts it.
+
+## Tasks
+
+`task setup` makes a fresh checkout runnable, and `task test` runs the suite. `task lint` runs the
+read-only checks, `typecheck` included, and `task format` rewrites files. `task --list` shows them.
