@@ -23,6 +23,15 @@ git-graph update --check                                                  # whet
 Name the index on the install: without it uv asks PyPI, where `git-graph` is a different project.
 uv records the index beside the tool, which is where `git-graph update` reads it back.
 
+Without access to that index, install from the source. Every dependency comes from PyPI:
+
+```bash
+uv tool install git+https://github.com/datapointchris/git-graph   # the latest commit on main
+uv tool install .                                                  # from a checkout of this repository
+```
+
+Upgrade such an install by running the same command again with `--reinstall`.
+
 `git-graph update` reinstalls the newest release over the current one. It refuses an install from a
 local checkout or from a branch, because neither carries a release version to compare. Every other
 command checks for a newer release at most once a day. When one exists, it prints one line after
