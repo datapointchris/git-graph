@@ -1,10 +1,9 @@
 """The timeline algebra: one event per git operation, and the walker that turns it into commands.
 
-Every option lives on the **event**, not on the scenario. An earlier design put the catch-up
-style and the landing button on the scenario, which made exactly five comparisons expressible
-and nothing else — a history where one branch rebases and another merges could not be written
-down at all. Here a scenario is only a name and a sequence, so the algebra bounds what can be
-modeled rather than the two axes someone happened to need first.
+Every option lives on the **event**, not on the scenario. A catch-up style or landing button set
+on the scenario would apply to every branch in it, so a history where one branch rebases and
+another merges could not be written down at all. A scenario is only a name and a sequence, so
+the algebra bounds what can be modeled rather than a fixed set of axes.
 
 `Open` taking a `base` is the whole of stacked pull requests and nested feature branches: a
 branch off a branch is not a special case, it is the general one with the default filled in.

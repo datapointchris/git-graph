@@ -129,7 +129,7 @@ def project_root(start: Path | None = None) -> Path | None:
     than hypothetical. Installed rather than checked out, this module sits in
     `…/lib/python3.13/site-packages/git_graph/`, where the third parent is the interpreter's
     version directory — so a guard built on counting would refuse `…/lib/python3.13` and leave
-    the actual checkout unprotected. Measured, not inferred.
+    the actual checkout unprotected.
 
     None is the honest answer for an installed build: there is no checkout to protect, and
     saying so beats naming the wrong directory with the same confidence.

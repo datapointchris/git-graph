@@ -22,8 +22,8 @@ before anything runs, and three separate places check for it:
 - `run_destructive()` — gates the KeyboardInterrupt cleanup, which bypasses `self.commands` and so
   would otherwise bypass every other guard.
 - The preamble of the generated `git-commands.sh` — **the one that matters.** That file holds the
-  command as a plain line and runs wherever it is invoked from, which is how this repo's own
-  `.git` was deleted once.
+  command as a plain line and runs wherever it is invoked from, so run from this checkout it
+  would delete this repo's own `.git`.
 
 Never add a destructive path that does not check `in_sandbox()`, and never weaken
 `prepare_sandbox` to "only refuse if it's a git repo" — a scratch directory full of unrelated
@@ -49,7 +49,7 @@ Four ways to break it silently, none of which any test names directly, so check 
 - **Reading the wall clock.** `authored()` and `committed()` pin `GIT_AUTHOR_DATE` and
   `GIT_COMMITTER_DATE`. Any command that creates a commit without going through one of them takes
   the current time and its hash stops being reproducible.
-- **Randomness.** The generator used Faker; it does not any more, and it must not again.
+- **Randomness.** No faker, `random` or `uuid4` in anything that feeds a command.
 - **Naming a branch in a commit message.** A commit made on a branch and fast-forwarded onto the
   trunk *is* the same commit. Put the branch in the message and it stops being one, which is
   exactly the fact `worktree-land` vs `commit-to-main` exists to demonstrate.
@@ -61,10 +61,9 @@ a rebased commit's new hash attributable to its new parent rather than to the cl
 ## Scenarios are a name and a timeline, and options live on the event
 
 `Open`, `Commit`, `CatchUp`, `Land`, `Restack`, `Merge`, `CherryPick`, `Revert`, `Push`, `Abandon`,
-`Tag`, `Note` — each carries its own options. An earlier design put the catch-up style and the
-landing button on the *scenario*, which made exactly five comparisons expressible: a history where
-one branch rebases and another merges could not be written down at all. Add capability by adding
-an event, never by adding a field to `Scenario`.
+`Tag`, `Note` — each carries its own options. An option on the *scenario* applies to every branch
+in it, so a history where one branch rebases and another merges could not be written down at all.
+Add capability by adding an event, never by adding a field to `Scenario`.
 
 `Open(feature, base=...)` is the whole of stacked pull requests and nested branches — a branch off
 a branch is the general case with the default filled in, not a special case.

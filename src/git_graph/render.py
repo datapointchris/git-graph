@@ -1,8 +1,7 @@
 """The visual layer: what a scenario did, and where two of them part company.
 
-The graphs are git's own `--graph` drawing rather than a layout engine written here. That is
-deliberate and it is the older decision this repo already made — git, lazygit and gitk all draw
-it better, and more usefully, the drawing you are shown is the one you will see in your own
+The graphs are git's own `--graph` drawing rather than a layout engine written here. git, lazygit
+and gitk all draw it better, and the drawing you are shown is the one you will see in your own
 terminal afterwards. What is added around it is what git cannot do: two of them side by side,
 a verdict naming where they diverge, and the hashes when nothing coarser will separate them.
 """
