@@ -111,6 +111,13 @@ def branch_name(feature: str) -> str:
     return f'feature/{feature.replace(" ", "-")}'
 
 
+class SandboxRefused(Exception):
+    """A directory that holds, or may hold, real work, so nothing destructive runs in it.
+
+    Raised rather than exiting, so the caller decides how a refusal reaches the user.
+    """
+
+
 def in_sandbox() -> bool:
     return Path(SANDBOX_MARKER).exists()
 
@@ -141,12 +148,12 @@ def refuse_unsafe_target(target_dir: Path) -> Path:
     """
     target = target_dir.resolve()
     if target == Path.home():
-        raise SystemExit(f'refusing to use {target} as a sandbox: it holds real work')
+        raise SandboxRefused(f'refusing to use {target} as a sandbox: it holds real work')
     checkout = project_root()
     if checkout is not None and (target == checkout or target in checkout.parents):
-        raise SystemExit(f'refusing to use {target} as a sandbox: it holds real work')
+        raise SandboxRefused(f'refusing to use {target} as a sandbox: it holds real work')
     if target.exists() and any(target.iterdir()) and not (target / SANDBOX_MARKER).exists():
-        raise SystemExit(f'refusing to use {target} as a sandbox: it is not empty and carries no {SANDBOX_MARKER}')
+        raise SandboxRefused(f'refusing to use {target} as a sandbox: it is not empty and carries no {SANDBOX_MARKER}')
     return target
 
 
@@ -256,11 +263,9 @@ class GitHistory:
     def __init__(
         self,
         interactive: bool = False,
-        dry_run: bool = False,
         target_dir: Path = Path('target/'),
     ):
         self.interactive = interactive
-        self.dry_run = dry_run
         self.target_dir = target_dir
         # Captured before any chdir so a relative target always resolves against where the
         # caller stood. Building a second scenario after a first would otherwise resolve
@@ -271,8 +276,6 @@ class GitHistory:
         self.current_step = ''
         self.clock = 0
         self.pull_request_number = 0
-        if self.interactive and self.dry_run:
-            raise ValueError('Cannot be interactive on a dry run')
 
     def __enter__(self):
         self.target_dir = prepare_sandbox(self.origin_dir / self.target_dir)
@@ -351,10 +354,7 @@ class GitHistory:
 
         user_prompt = f'{Fore.GREEN}[Enter]{Style.RESET_ALL} for next commit, {Fore.GREEN}"finish"{Style.RESET_ALL} to run the rest: '
         try:
-            if self.dry_run:
-                for command in self.commands:
-                    print(f'{Fore.BLUE}{command.text}{Style.RESET_ALL}')
-            elif self.interactive:
+            if self.interactive:
                 stepping = True
                 for command in self.commands:
                     run(command)
@@ -425,7 +425,7 @@ class GitHistory:
         where no chdir has happened — deletes from the caller's cwd.
         """
         if not in_sandbox():
-            raise SystemExit(f'refusing to run {command!r} outside a git-graph sandbox')
+            raise SandboxRefused(f'refusing to run {command!r} outside a git-graph sandbox')
         process.run(command)
 
     def write_file(self, path: str, content: str) -> None:

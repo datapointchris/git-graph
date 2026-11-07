@@ -90,6 +90,18 @@ def test_building_over_an_existing_sandbox_needs_force_when_not_a_terminal(tmp_p
     assert blocked.returncode == 2
 
 
+def test_a_target_holding_other_work_is_a_usage_error(tmp_path):
+    target = tmp_path / 'scratch'
+    target.mkdir()
+    (target / 'someone-elses-work.txt').touch()
+
+    refused = run('scenarios', 'build', 'squash-land', '--target', str(target))
+
+    assert refused.returncode == 2
+    assert (target / 'someone-elses-work.txt').exists()
+    assert not (target / SANDBOX_MARKER).exists()
+
+
 def test_refusing_a_rebuild_names_the_flag_that_would_allow_it(tmp_path):
     """Asserted at the source: the same message read back off stderr is rich's rendering of it,
     which colors the flag into `-` plus `-force` on a runner and not on a workstation."""

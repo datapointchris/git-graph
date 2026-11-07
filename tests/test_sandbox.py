@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from git_graph.history import SANDBOX_MARKER
+from git_graph.history import SandboxRefused
 from git_graph.history import in_sandbox
 from git_graph.history import prepare_sandbox
 from git_graph.history import project_root
@@ -33,7 +34,7 @@ def test_the_sandbox_refuses_the_checkout_it_ships_in():
     checkout = project_root()
     assert checkout is not None
 
-    with pytest.raises(SystemExit, match='real work'):
+    with pytest.raises(SandboxRefused, match='real work'):
         prepare_sandbox(checkout)
 
 
@@ -41,12 +42,12 @@ def test_the_sandbox_refuses_a_directory_holding_the_checkout():
     checkout = project_root()
     assert checkout is not None
 
-    with pytest.raises(SystemExit, match='real work'):
+    with pytest.raises(SandboxRefused, match='real work'):
         prepare_sandbox(checkout.parent)
 
 
 def test_the_sandbox_refuses_home():
-    with pytest.raises(SystemExit, match='real work'):
+    with pytest.raises(SandboxRefused, match='real work'):
         prepare_sandbox(Path.home())
 
 
@@ -54,7 +55,7 @@ def test_the_sandbox_refuses_a_populated_directory_with_no_marker(tmp_path):
     """Not merely an existing git repo — a scratch directory of unrelated files is not safe either."""
     (tmp_path / 'someone-elses-work.txt').touch()
 
-    with pytest.raises(SystemExit, match=SANDBOX_MARKER):
+    with pytest.raises(SandboxRefused, match=SANDBOX_MARKER):
         prepare_sandbox(tmp_path)
 
 

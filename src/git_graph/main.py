@@ -21,6 +21,7 @@ from git_graph.fingerprint import measure
 from git_graph.fingerprint import rehomed
 from git_graph.history import SANDBOX_MARKER
 from git_graph.history import GitHistory
+from git_graph.history import SandboxRefused
 from git_graph.history import refuse_unsafe_target
 from git_graph.scenarios import SCENARIOS
 from git_graph.scenarios import Scenario
@@ -140,7 +141,10 @@ def confirm_destroying(target: Path, force: bool) -> None:
     confirmation. Holding anything else, it is refused before any question, because no answer
     would make it safe to delete inside.
     """
-    refuse_unsafe_target(target)
+    try:
+        refuse_unsafe_target(target)
+    except SandboxRefused as error:
+        raise typer.BadParameter(f'{error}; pass --target an empty or new directory') from error
     if force or not (target / SANDBOX_MARKER).exists():
         return
     if not prompting_allowed():
@@ -151,12 +155,20 @@ def confirm_destroying(target: Path, force: bool) -> None:
 
 
 def build_into(scenario: Scenario, target: Path, interactive: bool = False) -> tuple[Path, Fingerprint, GitHistory]:
-    """Generate the scenario, run it in the sandbox, and measure what it left behind."""
-    with GitHistory(target_dir=target, interactive=interactive) as history:
-        scenario.generate(history)
-        history.write_commands_to_file('git-commands.sh')
-        history.execute_commands()
-        sandbox = history.target_dir
+    """Generate the scenario, run it in the sandbox, and measure what it left behind.
+
+    A refusal here is the cleanup after an interrupt finding no sandbox marker, so it ends the
+    run rather than asking for a different flag.
+    """
+    try:
+        with GitHistory(target_dir=target, interactive=interactive) as history:
+            scenario.generate(history)
+            history.write_commands_to_file('git-commands.sh')
+            history.execute_commands()
+            sandbox = history.target_dir
+    except SandboxRefused as error:
+        messages.print(f'git-graph: {error}')
+        raise typer.Exit(1) from error
     return sandbox, measure(sandbox), history
 
 
