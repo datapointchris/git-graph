@@ -1,8 +1,5 @@
 # Claude Code - git-graph Development Context
 
-Universal rules — git safety, commit conventions, testing, comments, tool preferences — live in
-`~/.claude/CLAUDE.md` and are not restated here.
-
 **This file contains ONLY git-graph-specific rules and patterns.**
 
 ## What this repo is for
