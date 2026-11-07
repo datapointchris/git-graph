@@ -94,9 +94,9 @@ PAUSE_VERBS = frozenset({'commit', 'merge', 'rebase', 'cherry-pick', 'revert'})
 def git_verb(text: str) -> str | None:
     """The git subcommand a command line runs, or None for a line that does not start with git.
 
-    Read past the leading `NAME=value` assignments rather than matched as a prefix. Every line
-    that creates a commit starts with the dates it pins, as in `GIT_AUTHOR_DATE=... git commit`,
-    so a prefix match finds none of them.
+    It reads past the leading `NAME=value` assignments. Every line that creates a commit starts
+    with the dates it pins, as in `GIT_AUTHOR_DATE=... git commit`, so a prefix match finds none
+    of them.
     """
     words = text.split()
     while words and ENVIRONMENT_ASSIGNMENT.fullmatch(words[0]):

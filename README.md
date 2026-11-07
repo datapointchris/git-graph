@@ -6,8 +6,7 @@ at instead of argued about. It answers questions the git documentation cannot se
 answer is a shape. One is what rebasing to catch up and merging to land produce several features
 in. Another is whether a commit made in a second worktree lands as the same commit.
 
-It generates sandboxes. It is not a git wrapper. Nothing in it runs against a repository that holds
-work. git draws every graph it shows, so the picture is the one `git log --graph` prints in your
+It builds sandboxes, and runs nothing against a repository that holds work. git draws every graph it shows, so the picture is the one `git log --graph` prints in your
 own terminal.
 
 ## Install
@@ -98,10 +97,9 @@ refuses a non-empty directory with no marker, because a scratch directory of unr
 safer to delete inside than a repository. Run from a checkout of this repository, it also refuses
 the checkout and every directory containing it.
 
-The script carries the same check in its preamble. That check is the one that matters. The script
-holds `rm -rf .git` as a plain line. It runs wherever it is invoked from. Outside a sandbox, its
-preamble is the only guard. If a checkout's `.git` is ever lost this way, this restores it
-without touching a file in the work tree:
+The script carries the same check in its preamble. It holds `rm -rf .git` as a plain line and runs
+wherever it is invoked from, so outside a sandbox its preamble is the only guard. If a checkout's
+`.git` is ever lost this way, this restores it without touching a file in the work tree:
 
 ```bash
 git init -b main
@@ -155,8 +153,8 @@ Move the trunk first, as `worktree-behind` does, and the verdict drops to `objec
 replays the commit onto the new tip under a new hash. A table names every commit that kept its
 content and changed its hash.
 
-Counts alone would call `rebase-catch-up` and `no-catch-up` identical. They agree on every number.
-Their graphs look nothing alike. That is why the ladder exists.
+Counts alone would call `rebase-catch-up` and `no-catch-up` identical: they agree on every number,
+and their graphs look nothing alike. The `topology` level is what tells them apart.
 
 ## Stops — the cost of a conflict, which the finished graph never records
 
