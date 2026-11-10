@@ -401,7 +401,9 @@ class GitHistory:
         self.command(f'git config user.email {quoted(SYNTHETIC_AUTHOR_EMAIL)}')
         # The marker and the bare remote live in the work tree, so `git add -A` would commit
         # them. Excluded through .git/info/exclude rather than a .gitignore, which would be a
-        # file in every generated history that no scenario asked for.
+        # file in every generated history that no scenario asked for. `git init` makes
+        # .git/info only from its template, and an `init.templateDir` may not carry one.
+        self.command('mkdir -p .git/info')
         self.command(f'printf {quoted(f"{SANDBOX_MARKER}\n{REMOTE_DIR}/\ngit-commands.sh\n")} > .git/info/exclude')
         self.command(f'git init --bare -b {DEFAULT_BRANCH} {REMOTE_DIR}')
         self.command(f'git remote add {REMOTE_NAME} ./{REMOTE_DIR}')
