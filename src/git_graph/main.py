@@ -162,7 +162,7 @@ def build_into(scenario: Scenario, target: Path, interactive: bool = False) -> t
     try:
         with GitHistory(target_dir=target, interactive=interactive) as history:
             scenario.generate(history)
-            history.write_commands_to_file('git-commands.sh')
+            history.write_commands_to_file()
             history.execute_commands()
             sandbox = history.target_dir
     except SandboxRefused as error:

@@ -14,6 +14,7 @@ import pytest
 import typer
 
 from git_graph.history import SANDBOX_MARKER
+from git_graph.history import SCRIPT_NAME
 from git_graph.main import confirm_destroying
 from git_graph.main import resolve
 from git_graph.scenarios import SCENARIOS
@@ -194,6 +195,6 @@ def test_a_build_leaves_the_rerunnable_script_behind(tmp_path):
 
     run('scenarios', 'build', 'rebase-land', '--target', str(target))
 
-    script = target / 'git-commands.sh'
+    script = target / SCRIPT_NAME
     assert script.is_file()
     assert script.read_text().startswith('#!/usr/bin/env bash')
