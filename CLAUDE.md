@@ -43,15 +43,16 @@ silently loses all three modes.
 `history.py`'s module docstring says how every commit is made reproducible, and why `compare`
 needs it to say two scenarios produced the *same objects* rather than merely the same shape.
 
-Four ways to break it silently, none of which any test names directly, so check for them by hand:
+Four ways to break it silently. `tests/test_history.py` pins the first two. No test names the
+last two, so check for them by hand:
 
 - **Reading the wall clock.** `authored()` and `committed()` pin `GIT_AUTHOR_DATE` and
   `GIT_COMMITTER_DATE`. Any command that creates a commit without going through one of them takes
   the current time and its hash stops being reproducible.
-- **Randomness.** No faker, `random` or `uuid4` in anything that feeds a command.
 - **Naming a branch in a commit message.** A commit made on a branch and fast-forwarded onto the
   trunk *is* the same commit. Put the branch in the message and it stops being one, which is
   exactly the fact `worktree-land` vs `commit-to-main` exists to demonstrate.
+- **Randomness.** No faker, `random` or `uuid4` in anything that feeds a command.
 - **Iterating a set.** Merge flags are sorted before rendering, for the same reason.
 
 `committed()` pins only the committer date, because a replay keeps its author. That is what makes
