@@ -307,9 +307,8 @@ class Walker:
         ref = self.resolve_ref(event.on)
         self.history.checkout(ref)
         for index in range(event.n):
-            path = event.touches or f'work-{self.history.clock:02d}.txt'
             message = event.message if event.n == 1 else f'{event.message} {index + 1}'
-            self.history.commit(message, touches=path, content=event.content or message)
+            path = self.history.commit(message, touches=event.touches, content=event.content or message)
             if event.on is None:
                 self.trunk_files.append(path)
             else:

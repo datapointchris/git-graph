@@ -436,7 +436,7 @@ class GitHistory:
     def checkout(self, ref: str) -> None:
         self.command(f'git checkout -q {ref}')
 
-    def commit(self, message: str, touches: str | None = None, content: str | None = None) -> None:
+    def commit(self, message: str, touches: str | None = None, content: str | None = None) -> str:
         """One commit, with deterministic content so its hash is a function of its history alone.
 
         The message deliberately does **not** name the branch. A commit made on a branch and
@@ -447,11 +447,15 @@ class GitHistory:
         `touches` names a file two branches can both write, which is the only way a conflict can
         arise here: by default every commit gets a file of its own, and a file nobody else
         writes never conflicts.
+
+        Returns the path written, so a caller tracking which files could contend records the
+        name this method chose rather than deciding it again.
         """
         path = touches or f'work-{self.clock:02d}.txt'
         self.write_file(path, content if content is not None else message)
         self.command('git add -A')
         self.command(self.authored(f'git commit -q -m {quoted(message)}'))
+        return path
 
     def open_branch(self, branch: str, base: str) -> None:
         self.command(f'git checkout -q -b {branch} {base}')
