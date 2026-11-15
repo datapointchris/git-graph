@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from git_graph.history import SANDBOX_MARKER
+from git_graph.history import GitHistory
 from git_graph.history import SandboxRefused
 from git_graph.history import in_sandbox
 from git_graph.history import prepare_sandbox
@@ -79,3 +80,14 @@ def test_in_sandbox_answers_for_the_working_directory(tmp_path, monkeypatch):
 
     (tmp_path / SANDBOX_MARKER).touch()
     assert in_sandbox()
+
+
+def test_the_interrupt_cleanup_refuses_to_delete_outside_a_sandbox(tmp_path, monkeypatch):
+    """Ctrl-C runs its `rm -rf .git` directly, past the queued commands and the script's preamble."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / '.git').mkdir()
+
+    with pytest.raises(SandboxRefused):
+        GitHistory().delete_repo(execute=True)
+
+    assert (tmp_path / '.git').is_dir()
