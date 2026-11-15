@@ -528,22 +528,23 @@ class GitHistory:
 
     def land(
         self,
-        branch: str,
+        feature: str,
         style: LandStyle,
         into: str = DEFAULT_BRANCH,
         title: str | None = None,
         body: str | None = None,
         delete: bool = True,
     ) -> None:
-        """Land a branch on the trunk the way the named button, or a fast-forward push, would.
+        """Land a feature's branch on the trunk the way the named button, or a fast-forward push, would.
 
         An approximation, and worth knowing where it stops: GitHub performs the real squash and
         rebase with its own committer identity and timestamps. The shape reproduces; the
         metadata does not, and the shape is what the comparison is for.
         """
+        branch = branch_name(feature)
         self.pull_request_number += 1
         pull_request = self.pull_request_number
-        title = title or f'feat: {branch.split("/", 1)[-1].replace("-", " ")}'
+        title = title or f'feat: {feature}'
         body = body or f'Landed with the {style} button as pull request #{pull_request}.'
 
         match style:

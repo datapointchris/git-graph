@@ -73,7 +73,7 @@ def test_a_commit_message_never_names_the_branch_it_was_made_on():
 
 def test_the_merge_button_leaves_a_merge_commit_and_a_deletable_branch():
     history = GitHistory()
-    history.land('feature/x', LandStyle.merge)
+    history.land('x', LandStyle.merge)
     assert [text for text in texts(history) if '--no-ff' in text]
     assert 'git branch -d -q feature/x' in texts(history)
 
@@ -81,13 +81,13 @@ def test_the_merge_button_leaves_a_merge_commit_and_a_deletable_branch():
 def test_the_squash_button_forces_the_branch_delete():
     """`-d` refuses, because the branch's own commits never reach the trunk."""
     history = GitHistory()
-    history.land('feature/x', LandStyle.squash)
+    history.land('x', LandStyle.squash)
     assert 'git branch -D -q feature/x' in texts(history)
 
 
 def test_a_fast_forward_landing_pushes_rather_than_merging():
     history = GitHistory()
-    history.land('feature/x', LandStyle.fast_forward)
+    history.land('x', LandStyle.fast_forward)
     assert [text for text in texts(history) if text.startswith('git push') and 'HEAD:main' in text]
     assert not [text for text in texts(history) if '--no-ff' in text]
 
@@ -95,7 +95,7 @@ def test_a_fast_forward_landing_pushes_rather_than_merging():
 @pytest.mark.parametrize('style', list(LandStyle))
 def test_a_title_that_would_break_the_shell_survives_quoting(style):
     history = GitHistory()
-    history.land('feature/x', style, title="fix: don't break the $SHELL")
+    history.land('x', style, title="fix: don't break the $SHELL")
     for command in history.commands:
         assert shlex.split(command.text) or command.text
 

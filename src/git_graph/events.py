@@ -342,7 +342,7 @@ class Walker:
     def land(self, event: Land) -> None:
         state = self.close(event.feature)
         into = self.resolve_ref(event.into)
-        self.history.land(state.branch, event.style, into=into, title=event.title, delete=event.delete)
+        self.history.land(event.feature, event.style, into=into, title=event.title, delete=event.delete)
         if into == TRUNK:
             # The trunk now carries whatever the branch wrote, so an open branch that has not
             # absorbed this landing is contending with those files too.
