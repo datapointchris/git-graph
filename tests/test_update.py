@@ -3,6 +3,7 @@
 Run in-process, unlike test_cli.py, because the release lookup is replaced rather than reached.
 """
 
+from pyselfupdate import Config
 from typer.testing import CliRunner
 
 from git_graph import main
@@ -24,7 +25,7 @@ def test_update_installs_the_published_release(monkeypatch):
 
 def test_update_does_not_also_print_the_update_notice(monkeypatch):
     monkeypatch.setattr(main, 'run_update', lambda config, **kwargs: None)
-    notices = []
+    notices: list[Config] = []
     monkeypatch.setattr(main, 'notify', notices.append)
 
     runner.invoke(main.app, ['update'])
