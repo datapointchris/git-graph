@@ -441,8 +441,8 @@ class GitHistory:
 
         The message deliberately does **not** name the branch. A commit made on a branch and
         fast-forwarded onto the trunk is the same commit either way, and a message carrying the
-        branch it happened to be typed on would make it a different one — which would hide the
-        single most useful thing this tool can show about a worktree.
+        branch it happened to be typed on would make it a different one, and `worktree-land`
+        would stop matching `commit-to-main`.
 
         `touches` names a file two branches can both write, which is the only way a conflict can
         arise here: by default every commit gets a file of its own, and a file nobody else

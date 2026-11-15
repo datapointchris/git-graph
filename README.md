@@ -4,7 +4,7 @@ git-graph builds throwaway git repositories from named scenarios. A scenario is 
 strategy, played out as a timeline of git operations. The graph it leaves behind can then be looked
 at instead of argued about. It answers questions the git documentation cannot settle, because the
 answer is a shape. One is what rebasing to catch up and merging to land produce several features
-in. Another is whether a commit made in a second worktree lands as the same commit.
+in. Another is whether a commit made on a branch, as a worktree makes one, lands as the same commit.
 
 It builds sandboxes, and runs nothing against a repository that holds work. git draws every graph it shows, so the picture is the one `git log --graph` prints in your
 own terminal.
@@ -153,10 +153,10 @@ fixed content and a fixed message. Its dates come from a clock that advances one
 and never reads the system time. Two scenarios doing the same work produce identical hashes. A hash
 that does differ differs for a reason worth naming.
 
-`worktree-land` against `commit-to-main` is the whole answer to what a worktree does to a
-repository: nothing. A second checkout shares one object store. Landing by fast-forward creates no
-commit of its own. One commit stays one commit. The history cannot be told from one typed on the
-trunk.
+`worktree-land` makes its commit on a branch and lands it by fast-forward. The build runs no
+`git worktree add`. A worktree shares the one object store, so a branch in the same checkout
+stands in for it. Against `commit-to-main` the verdict is `identical`. Landing by fast-forward
+creates no commit of its own, so the branch commit cannot be told from one typed on the trunk.
 
 Move the trunk first, as `worktree-behind` does, and the verdict drops to `objects`. The landing
 replays the commit onto the new tip under a new hash. A table names every commit that kept its

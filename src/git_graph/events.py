@@ -25,7 +25,7 @@ TRUNK = DEFAULT_BRANCH
 
 @dataclass(frozen=True)
 class Note:
-    """Says something happened that git will not record. The point of the worktree scenarios."""
+    """A line in the timeline that runs nothing, for a step the build does not perform."""
 
     text: str
 
@@ -36,7 +36,11 @@ class Note:
 
 @dataclass(frozen=True)
 class Open:
-    """Open a branch. `base` is another feature's name, or None for the trunk."""
+    """Open a branch. `base` is another feature's name, or None for the trunk.
+
+    `worktree` changes only the label. The branch is opened in the one checkout either way,
+    standing in for a worktree, which would share this object store.
+    """
 
     feature: str
     base: str | None = None
@@ -45,7 +49,7 @@ class Open:
     @property
     def label(self) -> str:
         where = f' off {self.base}' if self.base else ''
-        return f'open {self.feature}{where}{" in a worktree" if self.worktree else ""}'
+        return f'open {self.feature}{where}{" standing in for a worktree" if self.worktree else ""}'
 
 
 @dataclass(frozen=True)

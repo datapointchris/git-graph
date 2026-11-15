@@ -14,8 +14,8 @@ The four levels, each strictly finer than the last:
 
 The interesting verdicts are the last two. *Same trees, different objects* is a rebase or a
 cherry-pick: identical work, new identities. *Same objects* means two scenarios did not merely
-resemble each other, they produced the same repository — which is the strongest thing that can
-be said about a worktree, and it is only sayable because the generator is deterministic.
+resemble each other, they produced the same repository. Both verdicts rest on the generator
+being deterministic, which `git_graph.history` explains.
 """
 
 import enum

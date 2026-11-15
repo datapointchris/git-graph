@@ -40,9 +40,8 @@ silently loses all three modes.
 
 ## Determinism is load-bearing, not a nicety
 
-Every commit is generated with fixed content, a fixed message, and dates from a clock that
-advances one minute per commit. That is what lets `compare` say two scenarios produced the *same
-objects* rather than merely the same shape — and it is the entire basis of the worktree answer.
+`history.py`'s module docstring says how every commit is made reproducible, and why `compare`
+needs it to say two scenarios produced the *same objects* rather than merely the same shape.
 
 Four ways to break it silently, none of which any test names directly, so check for them by hand:
 
@@ -94,8 +93,8 @@ waiting — is the measurement.
 `conflict_point` means failing here is the number being reported. Collapsing them counts every
 harmless failure as a conflict.
 
-During a **rebase**, `--ours` is the branch being replayed *onto* and `--theirs` is your own work —
-the reverse of a merge. `conflict-keep-trunk` exists to show it, and it empties the branch.
+`Resolution` keeps git's spelling, `ours` and `theirs`, whose sides swap between a rebase and a
+merge. Its docstring says which is which. `conflict-keep-trunk` exists to show the swap.
 
 ## Two models of merging live here, on purpose
 

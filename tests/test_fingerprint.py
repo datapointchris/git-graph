@@ -22,11 +22,11 @@ def test_the_same_scenario_built_twice_is_the_same_repository(tmp_path, build):
     assert first.level(second) is Sameness.identical
 
 
-def test_a_worktree_leaves_no_trace_in_the_repository(tmp_path, build):
-    """The whole answer to what a worktree does: nothing a repository can see."""
-    _, worktree, _ = build('worktree-land', tmp_path / 'worktree')
+def test_a_fast_forwarded_branch_commit_is_the_trunk_commit(tmp_path, build):
+    """The branch stands in for a worktree, which shares the same object store."""
+    _, branched, _ = build('worktree-land', tmp_path / 'branched')
     _, direct, _ = build('commit-to-main', tmp_path / 'direct')
-    assert worktree.level(direct) is Sameness.identical
+    assert branched.level(direct) is Sameness.identical
 
 
 def test_replaying_work_keeps_the_shape_and_changes_the_hashes(tmp_path, build):

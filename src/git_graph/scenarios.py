@@ -1,10 +1,9 @@
 """The catalog: one named scenario per git strategy or command worth seeing the shape of.
 
 A scenario is a name and a timeline, nothing else. Where two scenarios exist to be compared
-they are built from one shared timeline with a single argument changed, so the difference in
-the result is attributable — `compare` reports a scenario pair as not like-for-like when their
-timelines differ in more than that, because a table of numbers cannot tell you which of two
-changes caused them.
+they vary one thing, mostly as one shared timeline with a single argument changed, so the
+difference in the result is attributable. A table of numbers cannot tell you which of two
+changes caused it. Nothing checks this: `compare` builds whatever pair it is given.
 """
 
 from dataclasses import dataclass
@@ -131,9 +130,8 @@ def stacked(base_land: LandStyle, fix: bool) -> Timeline:
 WORKTREE_WORK = Commit(message='refresh the session token', touches='auth.txt', content='token refreshed')
 """One commit, spelled identically wherever it is made — the control in the worktree comparison.
 
-Same message, same file, same content, and the deterministic clock puts it at the same instant
-in both scenarios. Everything that could differ is held fixed, so anything that *does* differ is
-the worktree.
+Message, file and content are fixed, and `git_graph.history`'s clock fixes the dates, so a pair
+built from it varies only the branch the commit is made on.
 """
 
 TRUNK_WORK = Commit(message='someone else lands first', touches='notes.txt', content='noted')
@@ -178,9 +176,9 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         name='worktree-land',
         group='Worktree',
-        teaches='One commit made in a second worktree, landed by fast-forward. Compare hashes with commit-to-main.',
+        teaches='One commit made on a branch standing in for a worktree, landed by fast-forward. Compare hashes with commit-to-main.',
         timeline=(
-            Note('git worktree add — a second checkout, sharing one object store with the first'),
+            Note('where git worktree add would run; a worktree shares this object store, so a branch here stands in for it'),
             Open('session token refresh', worktree=True),
             replace(WORKTREE_WORK, on='session token refresh'),
             Land('session token refresh', LandStyle.fast_forward),
@@ -197,7 +195,7 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         name='worktree-behind',
         group='Worktree',
-        teaches='The same commit, but the trunk moved first — so landing replays it under a new hash.',
+        teaches='The same branch commit, but the trunk moved first — so landing replays it under a new hash.',
         timeline=(
             Open('session token refresh', worktree=True),
             replace(WORKTREE_WORK, on='session token refresh'),
