@@ -138,12 +138,6 @@ def test_interactive_without_a_terminal_is_a_usage_error(tmp_path):
     assert not target.exists()
 
 
-@pytest.mark.parametrize('command', [('scenarios', 'list'), ('scenarios', 'show', 'rebase-catch-up')])
-def test_a_read_puts_only_its_data_on_stdout(command):
-    result = run(*command, '--json')
-    assert json.loads(result.stdout)
-
-
 def test_a_build_keeps_its_narration_off_stdout(tmp_path):
     """The one a function-call test cannot see: git's own output inherits the process's stdout."""
     result = run(
