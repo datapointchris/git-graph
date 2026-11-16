@@ -174,6 +174,13 @@ def test_comparing_two_scenarios_measures_both(tmp_path):
     assert (tmp_path / 'out' / 'merge-catch-up' / '.git').is_dir()
 
 
+def test_compare_draws_both_graphs_and_what_only_one_holds(tmp_path):
+    """The default output: both graphs, their widths, and the subjects only one side has."""
+    result = run('scenarios', 'compare', 'rebase-catch-up', 'merge-catch-up', '--target', str(tmp_path / 'out'))
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_compare_reports_the_level_at_which_two_scenarios_diverge(tmp_path):
     result = run('scenarios', 'compare', 'worktree-land', 'commit-to-main', '--target', str(tmp_path / 'out'), '--json')
 

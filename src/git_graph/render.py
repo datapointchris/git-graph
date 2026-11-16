@@ -19,7 +19,7 @@ from rich.text import Text
 from git_graph.fingerprint import VERDICTS
 from git_graph.fingerprint import Fingerprint
 from git_graph.fingerprint import Sameness
-from git_graph.fingerprint import graph
+from git_graph.fingerprint import commit_list
 from git_graph.fingerprint import only_in
 from git_graph.fingerprint import rehomed
 from git_graph.scenarios import Scenario
@@ -36,8 +36,9 @@ FIELD_HELP = {
 }
 
 
-def graph_panel(sandbox: Path, title: str) -> Panel:
-    return Panel(Text.from_ansi(graph(sandbox)), title=title, title_align='left', expand=True)
+def graph_panel(drawing: str, title: str) -> Panel:
+    """`drawing` is the colored text `fingerprint.graph` returns."""
+    return Panel(Text.from_ansi(drawing), title=title, title_align='left', expand=True)
 
 
 def side_by_side(console: Console, panels: list[Panel], widths: list[int]) -> RenderableType:
@@ -51,8 +52,9 @@ def side_by_side(console: Console, panels: list[Panel], widths: list[int]) -> Re
     return Group(*panels)
 
 
-def widest(sandbox: Path) -> int:
-    return max((len(line) for line in graph(sandbox, color=False).splitlines()), default=0)
+def widest(drawing: str) -> int:
+    """The longest line of a colored drawing, measured with its color codes stripped."""
+    return max((len(line) for line in Text.from_ansi(drawing).plain.splitlines()), default=0)
 
 
 def scenario_table(highlight: str = '') -> Table:
@@ -119,7 +121,8 @@ def difference_report(first: Path, second: Path, first_name: str, second_name: s
     """
     parts: list[RenderableType] = []
     if level in (Sameness.counts, Sameness.topology, Sameness.trees):
-        for name, here, there in ((first_name, first, second), (second_name, second, first)):
+        first_commits, second_commits = commit_list(first), commit_list(second)
+        for name, here, there in ((first_name, first_commits, second_commits), (second_name, second_commits, first_commits)):
             missing = only_in(here, there)
             if missing:
                 parts.append(Text(f'only in {name}: ' + ', '.join(missing)))

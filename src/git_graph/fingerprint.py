@@ -192,10 +192,13 @@ def rehomed(first: Path, second: Path) -> list[tuple[str, str, str]]:
     return [(ours[tree][1], ours[tree][0], theirs[tree][0]) for tree in ours.keys() & theirs.keys() if ours[tree][0] != theirs[tree][0]]
 
 
-def only_in(first: Path, second: Path) -> list[str]:
-    """Commit subjects the first repo has and the second does not."""
-    theirs = {subject for _, subject, _ in commit_list(second)}
-    return [subject for _, subject, _ in commit_list(first) if subject not in theirs]
+def only_in(first: list[tuple[str, str, str]], second: list[tuple[str, str, str]]) -> list[str]:
+    """Commit subjects the first `commit_list` has and the second does not.
+
+    Lists rather than paths, so a caller asking both directions reads each repo once.
+    """
+    theirs = {subject for _, subject, _ in second}
+    return [subject for _, subject, _ in first if subject not in theirs]
 
 
 def shared_trees(first: Path, second: Path) -> tuple[set[str], set[str]]:

@@ -17,6 +17,7 @@ from rich.text import Text
 from git_graph import render
 from git_graph.fingerprint import VERDICTS
 from git_graph.fingerprint import Fingerprint
+from git_graph.fingerprint import graph
 from git_graph.fingerprint import measure
 from git_graph.fingerprint import rehomed
 from git_graph.history import SANDBOX_MARKER
@@ -272,7 +273,7 @@ def build(
     if as_json:
         print_json(fingerprint.as_dict() | {'stops': history.stops, 'sandbox': str(sandbox)})
         return
-    console.print(render.graph_panel(sandbox, f'{scenario.name} — {scenario.teaches}'))
+    console.print(render.graph_panel(graph(sandbox), f'{scenario.name} — {scenario.teaches}'))
     console.print()
     console.print(render.counts_table({scenario.name: fingerprint}))
     console.print()
@@ -321,8 +322,9 @@ def compare(
         )
         return
 
-    panels = [render.graph_panel(sandboxes[name], name) for name in prints]
-    console.print(render.side_by_side(console, panels, [render.widest(sandboxes[name]) for name in prints]))
+    drawings = {name: graph(sandboxes[name]) for name in prints}
+    panels = [render.graph_panel(drawings[name], name) for name in prints]
+    console.print(render.side_by_side(console, panels, [render.widest(drawings[name]) for name in prints]))
     console.print()
     console.print(render.verdict_panel(level, first, second))
     console.print()
