@@ -21,6 +21,7 @@ from git_graph.fingerprint import graph
 from git_graph.fingerprint import measure
 from git_graph.fingerprint import rehomed
 from git_graph.history import SANDBOX_MARKER
+from git_graph.history import CommandFailed
 from git_graph.history import GitHistory
 from git_graph.history import SandboxRefused
 from git_graph.history import refuse_unsafe_target
@@ -158,7 +159,9 @@ def build_into(scenario: Scenario, target: Path, interactive: bool = False) -> t
     """Generate the scenario, run it in the sandbox, and measure what it left behind.
 
     A refusal here is the cleanup after an interrupt finding no sandbox marker, so it ends the
-    run rather than asking for a different flag.
+    run rather than asking for a different flag. A command that fails where the run does not
+    tolerate failure ends it too, leaving the sandbox as far as it got. A graph drawn from that
+    sandbox would not be the history the scenario describes.
     """
     try:
         with GitHistory(target_dir=target, interactive=interactive) as history:
@@ -166,7 +169,7 @@ def build_into(scenario: Scenario, target: Path, interactive: bool = False) -> t
             history.write_commands_to_file()
             history.execute_commands()
             sandbox = history.target_dir
-    except SandboxRefused as error:
+    except (SandboxRefused, CommandFailed) as error:
         messages.print(f'git-graph: {error}')
         raise typer.Exit(1) from error
     return sandbox, measure(sandbox), history

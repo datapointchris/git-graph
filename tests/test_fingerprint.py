@@ -52,9 +52,7 @@ def test_merging_to_catch_up_costs_a_merge_commit_per_absorption(tmp_path, build
 
 @pytest.mark.parametrize('scenario', SCENARIOS, ids=lambda scenario: scenario.name)
 def test_every_scenario_builds_and_can_be_measured(tmp_path, build, scenario):
-    """A build records exit codes rather than stopping, so a broken command still draws a graph."""
-    _, fingerprint, history = build(scenario.name, tmp_path / scenario.name)
-    failed = [result.command.text for result in history.results if result.exit_code and not result.command.tolerate_failure]
-    assert failed == []
+    """A build raises on any command that fails untolerated, so reaching the graph means none did."""
+    _, fingerprint, _ = build(scenario.name, tmp_path / scenario.name)
     assert fingerprint.counts.commits >= 1
     assert fingerprint.topology

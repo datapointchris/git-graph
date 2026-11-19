@@ -7,6 +7,7 @@ import pytest
 from git_graph.history import DEFAULT_BRANCH
 from git_graph.history import SYNTHETIC_AUTHOR_EMAIL
 from git_graph.history import CatchUpStyle
+from git_graph.history import CommandFailed
 from git_graph.history import GitHistory
 from git_graph.history import LandStyle
 from git_graph.history import branch_name
@@ -123,6 +124,18 @@ def test_a_conflict_probe_counts_and_a_tolerated_command_does_not():
     history.probe_stop(history.REBASE_IN_PROGRESS)
     assert [command for command in history.commands if command.conflict_point]
     assert [command for command in history.commands if command.tolerate_failure and not command.conflict_point]
+
+
+def test_a_build_stops_at_an_untolerated_failure_as_the_script_does(tmp_path):
+    """The emitted script runs under `set -e`, so the in-process run stops at the same line."""
+    with GitHistory(target_dir=tmp_path / 'sandbox') as history:
+        history.command('false', tolerate_failure=True)
+        history.command('false')
+        history.command('true')
+        with pytest.raises(CommandFailed):
+            history.execute_commands()
+    ran = [(result.command.text, result.command.tolerate_failure) for result in history.results]
+    assert ran[-2:] == [('false', True), ('false', False)]
 
 
 def test_commands_are_attributed_to_the_event_that_queued_them():

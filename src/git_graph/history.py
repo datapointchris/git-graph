@@ -121,6 +121,18 @@ class SandboxRefused(Exception):
     """
 
 
+class CommandFailed(Exception):
+    """A queued command exited nonzero where the run does not tolerate failure.
+
+    The build stops here, where the emitted script's `set -e` stops too, so a run in process and
+    the same run from `git-commands.sh` leave the same repository behind.
+    """
+
+    def __init__(self, result: 'CommandResult'):
+        super().__init__(f'exit {result.exit_code} from {result.command.text}')
+        self.result = result
+
+
 def in_sandbox() -> bool:
     return Path(SANDBOX_MARKER).exists()
 
@@ -342,7 +354,10 @@ class GitHistory:
         """Run the queued commands, recording the exit code of each.
 
         The exit codes are data: a conflict is a rebase that failed, and counting those is the
-        only way to report a cost the finished graph does not record.
+        only way to report a cost the finished graph does not record. A command that exits
+        nonzero without `tolerate_failure` raises `CommandFailed` and runs nothing after it. That
+        is the same flag `write_commands_to_file` reads to append `|| true`, so the script and
+        this loop stop at the same line.
         """
 
         def run(command: Command) -> None:
@@ -353,7 +368,10 @@ class GitHistory:
             completed = process.run(command.text, capture_stdout=True)
             if completed.stdout:
                 print(completed.stdout, end='', file=sys.stderr, flush=True)
-            self.results.append(CommandResult(command=command, exit_code=completed.returncode))
+            result = CommandResult(command=command, exit_code=completed.returncode)
+            self.results.append(result)
+            if result.exit_code and not command.tolerate_failure:
+                raise CommandFailed(result)
 
         user_prompt = f'{Fore.GREEN}[Enter]{Style.RESET_ALL} for next commit, {Fore.GREEN}"finish"{Style.RESET_ALL} to run the rest: '
         try:
