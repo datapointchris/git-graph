@@ -15,7 +15,7 @@ that holds work.
 ## Everything Destroys a Repo (⚠️ CRITICAL)
 
 Every path ends in `rm -rf .git`. A target directory must carry a `.git-graph-sandbox` marker
-before anything runs, and three separate places check for it:
+before anything runs, and each of these checks for it:
 
 - `prepare_sandbox()` — creates the directory and marker, and refuses `$HOME`, this repo, any
   directory containing this repo, and any non-empty directory with no marker.
@@ -43,8 +43,9 @@ silently loses all three modes.
 `history.py`'s module docstring says how every commit is made reproducible, and why `compare`
 needs it to say two scenarios produced the *same objects* rather than merely the same shape.
 
-Four ways to break it silently. `tests/test_history.py` pins the first two. No test names the
-last two, so check for them by hand:
+Ways to break it silently. `tests/test_history.py` pins reading the wall clock and naming a
+branch in a commit message. No test names randomness or set iteration, so check for those by
+hand:
 
 - **Reading the wall clock.** `authored()` and `committed()` pin `GIT_AUTHOR_DATE` and
   `GIT_COMMITTER_DATE`. Any command that creates a commit without going through one of them takes
@@ -60,9 +61,9 @@ a rebased commit's new hash attributable to its new parent rather than to the cl
 
 ## Scenarios are a name and a timeline, and options live on the event
 
-`Open`, `Commit`, `CatchUp`, `Land`, `Restack`, `Merge`, `CherryPick`, `Revert`, `Push`, `Abandon`,
-`Tag`, `Note` — each carries its own options. An option on the *scenario* applies to every branch
-in it, so a history where one branch rebases and another merges could not be written down at all.
+The `Event` union in `src/git_graph/events.py` lists every event, and each carries its own
+options. An option on the *scenario* applies to every branch in it, so a history where one branch
+rebases and another merges could not be written down at all.
 Add capability by adding an event, never by adding a field to `Scenario`.
 
 `Open(feature, base=...)` is the whole of stacked pull requests and nested branches — a branch off
